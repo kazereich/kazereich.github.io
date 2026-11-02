@@ -1,536 +1,163 @@
 
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Minecraft UUID Lookup</title>
+const ALLOWED_ORIGIN = "https://kazereich.github.io";
+const CACHE_TTL = 600; // 10分
 
-<style>
-*{box-sizing:border-box}
-
-body{
-  margin:0;
-  background:#10131b;
-  color:#e8eaf0;
-  font-family:Arial,"Noto Sans JP",sans-serif;
+function corsHeaders(origin) {
+  return {
+    "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Vary": "Origin"
+  };
 }
 
-.container{
-  max-width:850px;
-  margin:50px auto;
-  padding:20px;
+function jsonResponse(data, status, origin) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      ...corsHeaders(origin),
+      "Content-Type": "application/json; charset=UTF-8",
+      "Cache-Control": "no-store"
+    }
+  });
 }
 
-h1{
-  text-align:center;
-  font-size:27px;
-}
-
-.sub{
-  text-align:center;
-  color:#8993a5;
-  margin-bottom:35px;
-}
-
-.search{
-  display:flex;
-  gap:10px;
-  background:#1b2130;
-  padding:15px;
-  border-radius:12px;
-}
-
-input{
-  flex:1;
-  min-width:0;
-  padding:13px;
-  border:1px solid #353d50;
-  border-radius:8px;
-  background:#111722;
-  color:white;
-  font-size:15px;
-}
-
-button{
-  border:0;
-  border-radius:8px;
-  padding:11px 16px;
-  background:#3985ed;
-  color:white;
-  font-weight:bold;
-  cursor:pointer;
-}
-
-button:hover{
-  filter:brightness(1.15);
-}
-
-button:disabled{
-  opacity:.5;
-  cursor:wait;
-}
-
-.card{
-  background:#1b2130;
-  border:1px solid #30394b;
-  border-radius:13px;
-  padding:20px;
-  margin-top:20px;
-}
-
-.profile{
-  display:flex;
-  align-items:center;
-  gap:20px;
-}
-
-.name{
-  font-size:25px;
-  font-weight:bold;
-  word-break:break-all;
-}
-
-.uuid{
-  color:#929daf;
-  font-size:13px;
-  word-break:break-all;
-  margin-top:8px;
-}
-
-.actions{
-  display:flex;
-  gap:8px;
-  flex-wrap:wrap;
-  margin-top:15px;
-}
-
-.secondary{
-  background:#343e52;
-}
-
-.section-title{
-  font-size:17px;
-  font-weight:bold;
-  margin-bottom:15px;
-}
-
-.status{
-  text-align:center;
-  color:#aab4c5;
-  margin-top:20px;
-  line-height:1.7;
-  white-space:pre-line;
-}
-
-.error{
-  color:#ff7777;
-}
-
-.note{
-  font-size:12px;
-  color:#8792a5;
-  line-height:1.8;
-}
-
-.hidden{
-  display:none;
-}
-
-@media(max-width:550px){
-  .container{
-    margin:20px auto;
-    padding:12px;
-  }
-
-  .search{
-    flex-direction:column;
-  }
-
-  .profile{
-    align-items:flex-start;
-  }
-
-  .name{
-    font-size:20px;
-  }
-}
-</style>
-</head>
-
-<body>
-
-<div class="container">
-
-<h1>⛏ Minecraft UUID Lookup</h1>
-
-<div class="sub">
-UUIDからプレイヤー情報・名前を検索
-</div>
-
-<div class="search">
-
-<input
-  id="uuidInput"
-  placeholder="Minecraft UUIDを入力"
->
-
-<button
-  id="searchBtn"
-  onclick="searchPlayer()"
->
-検索
-</button>
-
-</div>
-
-<div id="status" class="status">
-UUIDを入力して検索してください。
-</div>
-
-<div id="result" class="hidden">
-
-  <div class="card">
-
-    <div class="profile">
-
-      <div style="min-width:0">
-
-        <div
-          id="playerName"
-          class="name"
-        ></div>
-
-        <div
-          id="playerUUID"
-          class="uuid"
-        ></div>
-
-      </div>
-
-    </div>
-
-    <div class="actions">
-
-      <button onclick="copyText(currentName)">
-        名前をコピー
-      </button>
-
-      <button
-        class="secondary"
-        onclick="copyText(currentUUID)"
-      >
-        UUIDをコピー
-      </button>
-
-      <button
-        class="secondary"
-        onclick="copyText(currentUUID.replaceAll('-',''))"
-      >
-        ハイフンなしUUID
-      </button>
-
-    </div>
-
-  </div>
-
-  <div class="card">
-
-    <div class="section-title">
-      📋 プレイヤー情報
-    </div>
-
-    <div id="info" class="note"></div>
-
-    <div class="actions">
-
-      <button onclick="copyAll()">
-        情報をすべてコピー
-      </button>
-
-    </div>
-
-  </div>
-
-</div>
-
-<div class="card">
-
-  <div class="section-title">
-    使い方・注意事項
-  </div>
-
-  <div class="note">
-    ・Minecraft Java EditionのUUIDに対応しています。<br>
-    ・UUIDから現在のプレイヤー名を取得します。<br>
-    ・名前の取得にはAshcon APIを使用しています。<br>
-    ・過去の名前履歴は取得しません。<br>
-    ・UUIDは名前変更後も基本的に変わりません。<br>
-    ・APIの停止や通信制限により取得できない場合があります。
-  </div>
-
-</div>
-
-</div>
-
-<script>
-
-let currentUUID = "";
-let currentName = "";
-
-const $ = id => document.getElementById(id);
-
-
-// UUIDの形式を統一
-function normalizeUUID(value){
-
-  return value
-    .trim()
-    .replace(/-/g,"")
-    .toLowerCase();
-
-}
-
-
-// UUIDにハイフンを追加
-function formatUUID(value){
-
-  return value.replace(
-    /^(.{8})(.{4})(.{4})(.{4})(.{12})$/,
-    "$1-$2-$3-$4-$5"
-  );
-
-}
-
-
-// ステータス表示
-function setStatus(message,error=false){
-
-  $("status").textContent = message;
-
-  $("status").className =
-    error ? "status error" : "status";
-
-}
-
-
-// プレイヤー検索
-async function searchPlayer(){
-
-  const uuid = normalizeUUID(
-    $("uuidInput").value
-  );
-
-  if(!/^[0-9a-f]{32}$/.test(uuid)){
-
-    setStatus(
-      "UUIDの形式が正しくありません。",
-      true
+export default {
+  async fetch(request, env, ctx) {
+    const origin = request.headers.get("Origin") || "";
+
+    if (origin && origin !== ALLOWED_ORIGIN) {
+      return new Response("Forbidden", { status: 403 });
+    }
+
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          ...corsHeaders(origin),
+          "Access-Control-Max-Age": "86400"
+        }
+      });
+    }
+
+    if (request.method !== "GET") {
+      return jsonResponse({ error: "Method not allowed" }, 405, origin);
+    }
+
+    const url = new URL(request.url);
+    const match = url.pathname.match(
+      /^\/api\/minecraft\/([0-9a-f-]{32,36})$/i
     );
 
-    return;
+    if (!match) {
+      return jsonResponse({ error: "Invalid URL" }, 400, origin);
+    }
 
-  }
+    const uuid = match[1].replace(/-/g, "").toLowerCase();
 
+    if (!/^[0-9a-f]{32}$/.test(uuid)) {
+      return jsonResponse({ error: "Invalid UUID" }, 400, origin);
+    }
 
-  $("searchBtn").disabled = true;
+    const cacheKey = new Request(
+      `https://minecraft-uuid-cache.example/${uuid}`
+    );
 
-  $("result").classList.add("hidden");
+    const cache = caches.default;
 
-  setStatus(
-    "最新のプレイヤー名を取得しています..."
-  );
+    // キャッシュ確認
+    const cached = await cache.match(cacheKey);
 
+    if (cached) {
+      const headers = new Headers(cached.headers);
+      Object.entries(corsHeaders(origin)).forEach(([key, value]) => {
+        headers.set(key, value);
+      });
+      headers.set("X-Cache", "HIT");
 
-  try{
+      return new Response(cached.body, {
+        status: cached.status,
+        headers
+      });
+    }
 
-    // Ashcon API
-    // UUIDからプレイヤー情報を取得
-    const apiURL =
-      "https://api.ashcon.app/mojang/v2/user/" +
-      encodeURIComponent(uuid);
-
-    const response = await fetch(apiURL,{
-      method:"GET",
-      cache:"no-store"
-    });
-
-
-    if(response.status === 404){
-
-      throw new Error(
-        "このUUIDのプレイヤーが見つかりませんでした。"
+    try {
+      const apiResponse = await fetch(
+        `https://api.ashcon.app/mojang/v2/user/${uuid}`,
+        {
+          headers: {
+            "Accept": "application/json"
+          }
+        }
       );
 
-    }
+      if (!apiResponse.ok) {
+        if (apiResponse.status === 404) {
+          return jsonResponse(
+            { error: "Player not found" },
+            404,
+            origin
+          );
+        }
 
+        if (apiResponse.status === 429) {
+          return jsonResponse(
+            { error: "Upstream rate limit" },
+            429,
+            origin
+          );
+        }
 
-    if(response.status === 429){
+        return jsonResponse(
+          { error: "Upstream API error", status: apiResponse.status },
+          502,
+          origin
+        );
+      }
 
-      throw new Error(
-        "アクセス制限中です。しばらく待ってから再検索してください。"
+      const data = await apiResponse.json();
+
+      if (!data.username) {
+        return jsonResponse(
+          { error: "Username not found" },
+          502,
+          origin
+        );
+      }
+
+      const result = {
+        username: data.username,
+        uuid: uuid
+      };
+
+      const response = new Response(JSON.stringify(result), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json; charset=UTF-8",
+          "Cache-Control": `public, max-age=${CACHE_TTL}`
+        }
+      });
+
+      // 成功した結果だけを10分間キャッシュ
+      ctx.waitUntil(cache.put(cacheKey, response.clone()));
+
+      const headers = new Headers(response.headers);
+      Object.entries(corsHeaders(origin)).forEach(([key, value]) => {
+        headers.set(key, value);
+      });
+      headers.set("X-Cache", "MISS");
+
+      return new Response(response.body, {
+        status: 200,
+        headers
+      });
+
+    } catch (error) {
+      return jsonResponse(
+        { error: "API connection failed" },
+        502,
+        origin
       );
-
     }
-
-
-    if(!response.ok){
-
-      throw new Error(
-        "APIエラー HTTP " + response.status
-      );
-
-    }
-
-
-    const data = await response.json();
-
-
-    // 取得データの確認
-    if(!data || !data.username){
-
-      throw new Error(
-        "プレイヤー名がAPIから返されませんでした。"
-      );
-
-    }
-
-
-    // UUIDの一致確認
-    const returnedUUID = normalizeUUID(
-      data.uuid || ""
-    );
-
-    if(returnedUUID && returnedUUID !== uuid){
-
-      throw new Error(
-        "取得したUUIDが入力したUUIDと一致しません。"
-      );
-
-    }
-
-
-    // 現在の名前
-    currentName = data.username;
-
-    currentUUID = formatUUID(
-      returnedUUID || uuid
-    );
-
-
-    // 画面に表示
-    $("playerName").textContent =
-      currentName;
-
-    $("playerUUID").textContent =
-      currentUUID;
-
-
-    $("info").textContent =
-      "プレイヤー名: " + currentName +
-      "\nUUID: " + currentUUID;
-
-    $("info").style.whiteSpace =
-      "pre-line";
-
-
-    $("result").classList.remove("hidden");
-
-    setStatus(
-      "取得完了！"
-    );
-
-
-  }catch(error){
-
-    console.error(
-      "Minecraft UUID Lookup Error:",
-      error
-    );
-
-    let message = error.message;
-
-    if(error instanceof TypeError){
-
-      message =
-        "通信に失敗しました。インターネット接続またはAPIの通信制限を確認してください。";
-
-    }
-
-    setStatus(
-      "取得エラー: " + message,
-      true
-    );
-
-  }finally{
-
-    $("searchBtn").disabled = false;
-
   }
-
-}
-
-
-// コピー機能
-async function copyText(text){
-
-  try{
-
-    await navigator.clipboard.writeText(
-      String(text)
-    );
-
-    setStatus("コピーしました！");
-
-  }catch(error){
-
-    const area =
-      document.createElement("textarea");
-
-    area.value = String(text);
-
-    document.body.appendChild(area);
-
-    area.select();
-
-    document.execCommand("copy");
-
-    area.remove();
-
-    setStatus("コピーしました！");
-
-  }
-
-}
-
-
-// 情報をまとめてコピー
-function copyAll(){
-
-  copyText(
-    "Minecraft Player Information\n" +
-    "Name: " + currentName + "\n" +
-    "UUID: " + currentUUID
-  );
-
-}
-
-
-// Enterキーで検索
-$("uuidInput").addEventListener(
-  "keydown",
-  event => {
-
-    if(event.key === "Enter"){
-
-      searchPlayer();
-
-    }
-
-  }
-);
-
-</script>
-
-</body>
-</html>
+};
