@@ -3,7 +3,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Minecraft UUID Lookup</title>
 <style>
 *{box-sizing:border-box}
@@ -19,8 +19,9 @@ h1{text-align:center;font-size:27px}
   padding:15px;border-radius:12px;
 }
 input{
-  flex:1;min-width:0;padding:13px;border:1px solid #353d50;
-  border-radius:8px;background:#111722;color:white;font-size:15px;
+  flex:1;min-width:0;padding:13px;
+  border:1px solid #353d50;border-radius:8px;
+  background:#111722;color:white;font-size:15px;
 }
 button{
   border:0;border-radius:8px;padding:11px 16px;
@@ -42,22 +43,20 @@ button:disabled{opacity:.5;cursor:wait}
 .uuid{color:#929daf;font-size:13px;word-break:break-all;margin-top:8px}
 .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}
 .secondary{background:#343e52}
-.section-title{
-  font-size:17px;font-weight:bold;
-  margin-bottom:15px;
-}
-.history-item{
-  display:flex;align-items:center;justify-content:space-between;
-  gap:12px;padding:13px 0;border-bottom:1px solid #30394b;
-}
-.history-item:last-child{border-bottom:0}
-.history-name{font-weight:bold;word-break:break-all}
-.date{font-size:12px;color:#929daf;margin-top:5px}
-.small{padding:8px 12px;font-size:12px;flex-shrink:0}
-.status{text-align:center;color:#aab4c5;margin-top:20px}
+.section-title{font-size:17px;font-weight:bold;margin-bottom:15px}
+.status{text-align:center;color:#aab4c5;margin-top:20px;line-height:1.7}
 .error{color:#ff7777}
-.note{font-size:12px;color:#8792a5;line-height:1.7}
+.note{font-size:12px;color:#8792a5;line-height:1.8}
 .hidden{display:none}
+.images{
+  display:flex;gap:30px;flex-wrap:wrap;align-items:flex-start;
+}
+.images>div{text-align:center}
+.images img{
+  object-fit:contain;background:#111722;
+  border-radius:10px;padding:8px;
+}
+.small{font-size:12px;padding:8px 12px}
 @media(max-width:550px){
   .container{margin:20px auto;padding:12px}
   .search{flex-direction:column}
@@ -68,77 +67,102 @@ button:disabled{opacity:.5;cursor:wait}
 </style>
 </head>
 <body>
+
 <div class="container">
-  <h1>⛏ Minecraft UUID Lookup</h1>
-  <div class="sub">UUIDからプレイヤー情報・名前履歴を検索</div>
 
-  <div class="search">
-    <input id="uuidInput" placeholder="Minecraft UUIDを入力">
-    <button id="searchBtn" onclick="searchPlayer()">検索</button>
-  </div>
+<h1>⛏ Minecraft UUID Lookup</h1>
+<div class="sub">UUIDからプレイヤー情報・スキンを検索</div>
 
-  <div id="status" class="status">UUIDを入力して検索してください。</div>
+<div class="search">
+  <input id="uuidInput" placeholder="Minecraft UUIDを入力">
+  <button id="searchBtn" onclick="searchPlayer()">検索</button>
+</div>
 
-  <div id="result" class="hidden">
-    <div class="card">
-      <div class="profile">
-        <img id="avatar" class="avatar" alt="Player Head">
-        <div style="min-width:0">
-          <div id="playerName" class="name"></div>
-          <div id="playerUUID" class="uuid"></div>
-        </div>
-      </div>
-      <div class="actions">
-        <button onclick="copyText(currentUUID)">UUIDをコピー</button>
-        <button class="secondary" onclick="copyText(currentName)">現在の名前をコピー</button>
-        <button class="secondary" onclick="copyText(currentUUID.replaceAll('-',''))">ハイフンなしUUID</button>
+<div id="status" class="status">
+UUIDを入力して検索してください。
+</div>
+
+<div id="result" class="hidden">
+
+  <div class="card">
+    <div class="profile">
+      <img id="avatar" class="avatar" alt="Player Face">
+      <div style="min-width:0">
+        <div id="playerName" class="name"></div>
+        <div id="playerUUID" class="uuid"></div>
       </div>
     </div>
 
-    <div class="card">
-      <div class="section-title">📜 名前の変更履歴</div>
-      <div id="history"></div>
-      <div class="actions">
-        <button onclick="copyAll()">履歴をすべてコピー</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="section-title">🖼 プレイヤー画像</div>
-      <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center">
-        <div style="text-align:center">
-          <img id="headImage" width="120" height="120" style="image-rendering:pixelated">
-          <div class="note">顔画像</div>
-        </div>
-        <div style="text-align:center">
-          <img id="bodyImage" width="120" height="180" style="object-fit:contain">
-          <div class="note">全身画像</div>
-        </div>
-      </div>
-      <div class="actions">
-        <button class="secondary" onclick="openImage()">顔画像を開く</button>
-        <button class="secondary" onclick="copyText(imageURL)">画像URLをコピー</button>
-      </div>
+    <div class="actions">
+      <button onclick="copyText(currentUUID)">UUIDをコピー</button>
+      <button class="secondary" onclick="copyText(currentUUID.replaceAll('-',''))">
+        ハイフンなしUUID
+      </button>
+      <button class="secondary" onclick="copyText(currentName)">
+        名前をコピー
+      </button>
     </div>
   </div>
 
   <div class="card">
-    <div class="section-title">使い方・注意事項</div>
-    <div class="note">
-      ・Java EditionのUUIDに対応しています。<br>
-      ・名前履歴は外部APIのデータに依存します。<br>
-      ・削除済みアカウントなどは取得できない場合があります。<br>
-      ・画像はCrafatarから取得します。<br>
-      ・APIの停止やアクセス制限により検索できない場合があります。
+    <div class="section-title">🖼 プレイヤー画像</div>
+
+    <div class="images">
+      <div>
+        <img id="headImage" width="130" height="130" alt="Head">
+        <div class="note">顔画像</div>
+        <button class="small secondary" onclick="openImage('head')">
+          画像を開く
+        </button>
+      </div>
+
+      <div>
+        <img id="bodyImage" width="130" height="190" alt="Body">
+        <div class="note">全身画像</div>
+        <button class="small secondary" onclick="openImage('body')">
+          画像を開く
+        </button>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="secondary" onclick="copyText(headURL)">
+        顔画像URLをコピー
+      </button>
+      <button class="secondary" onclick="copyText(bodyURL)">
+        全身画像URLをコピー
+      </button>
     </div>
   </div>
+
+  <div class="card">
+    <div class="section-title">📋 プレイヤー情報</div>
+    <div id="info" class="note"></div>
+    <div class="actions">
+      <button onclick="copyAll()">情報をすべてコピー</button>
+    </div>
+  </div>
+
+</div>
+
+<div class="card">
+  <div class="section-title">使い方・注意事項</div>
+  <div class="note">
+    ・Java EditionのUUIDに対応しています。<br>
+    ・現在のMinecraftプレイヤー名を取得します。<br>
+    ・顔画像と全身画像はCrafatarから取得します。<br>
+    ・過去の名前履歴は取得しません。<br>
+    ・APIの停止や通信制限により検索できない場合があります。
+  </div>
+</div>
+
 </div>
 
 <script>
 let currentUUID = "";
 let currentName = "";
-let currentHistory = [];
-let imageURL = "";
+let headURL = "";
+let bodyURL = "";
 
 const $ = id => document.getElementById(id);
 
@@ -158,120 +182,88 @@ function setStatus(message,error=false){
   $("status").className=error?"status error":"status";
 }
 
-async function fetchJSON(url){
-  const response=await fetch(url);
-  if(!response.ok) throw new Error("HTTP "+response.status);
-  return response.json();
-}
-
 async function searchPlayer(){
-  const input=normalizeUUID($("uuidInput").value);
+  const uuid=normalizeUUID($("uuidInput").value);
 
-  if(!/^[0-9a-f]{32}$/.test(input)){
+  if(!/^[0-9a-f]{32}$/.test(uuid)){
     setStatus("UUIDの形式が正しくありません。",true);
     return;
   }
 
   $("searchBtn").disabled=true;
   $("result").classList.add("hidden");
-  setStatus("プレイヤー情報を取得中...");
+  setStatus("プレイヤー情報を取得しています...");
 
   try{
-    let data=null;
-    let apiError=null;
+    const url="https://playerdb.co/api/player/minecraft/"+encodeURIComponent(uuid);
 
-    // Ashcon APIからプロフィール・名前履歴を取得
-    try{
-      data=await fetchJSON(
-        "https://api.ashcon.app/mojang/v2/user/"+input
+    const response=await fetch(url);
+
+    if(!response.ok){
+      throw new Error("PlayerDB HTTP "+response.status);
+    }
+
+    const result=await response.json();
+
+    if(result.code!=="player.found" || !result.data?.player){
+      throw new Error(
+        result.message || "プレイヤーが見つかりませんでした。"
       );
-    }catch(e){
-      apiError=e;
     }
 
-    // APIが利用できない場合は公式APIから現在の名前を取得
-    if(!data){
-      try{
-        data=await fetchJSON(
-          "https://api.minecraftservices.com/minecraft/profile/lookup/"+input
-        );
-      }catch(e){
-        throw new Error("プロフィールを取得できませんでした。APIの停止や通信制限の可能性があります。");
-      }
+    const player=result.data.player;
+
+    currentName=player.username;
+    currentUUID=formatUUID(normalizeUUID(player.id || uuid));
+
+    if(!currentName){
+      throw new Error("プレイヤー名が取得できませんでした。");
     }
 
-    const uuid=normalizeUUID(data.uuid || data.id || input);
-    const name=data.username || data.name;
+    // 画像URL
+    const imageId=normalizeUUID(currentUUID);
 
-    if(!name) throw new Error("プレイヤー名が見つかりません。");
+    headURL=
+      "https://crafatar.com/avatars/"+imageId+
+      "?size=256&overlay&default=404";
 
-    currentUUID=formatUUID(uuid);
-    currentName=name;
+    bodyURL=
+      "https://crafatar.com/renders/body/"+imageId+
+      "?scale=6&overlay&default=404";
 
-    // 画像
-    imageURL="https://crafatar.com/avatars/"+uuid+"?size=256&overlay";
-    $("avatar").src=imageURL;
-    $("headImage").src="https://crafatar.com/renders/head/"+uuid+"?scale=8&overlay";
-    $("bodyImage").src="https://crafatar.com/renders/body/"+uuid+"?scale=5&overlay";
+    const avatarURL=
+      "https://crafatar.com/avatars/"+imageId+
+      "?size=256&overlay&default=404";
 
-    $("playerName").textContent=name;
+    $("avatar").src=avatarURL;
+    $("headImage").src=
+      "https://crafatar.com/renders/head/"+imageId+
+      "?scale=6&overlay&default=404";
+
+    $("bodyImage").src=bodyURL;
+
+    $("playerName").textContent=currentName;
     $("playerUUID").textContent=currentUUID;
 
-    // 履歴
-    const history=data.username_history || data.name_history || [];
-    currentHistory=history;
+    $("info").textContent=
+      "プレイヤー名: "+currentName+
+      "\nUUID: "+currentUUID;
 
-    const historyBox=$("history");
-    historyBox.innerHTML="";
-
-    if(history.length===0){
-      historyBox.textContent=
-        apiError
-        ? "名前履歴APIに接続できませんでした。現在の名前のみ表示しています。"
-        : "名前履歴が取得できませんでした。";
-    }else{
-      history.forEach((item,index)=>{
-        const username=item.username || item.name;
-        if(!username) return;
-
-        const dateValue=item.changed_at || item.changedToAt;
-        let dateText="最初の名前・変更日時不明";
-
-        if(dateValue){
-          const date=new Date(dateValue);
-          if(!isNaN(date.getTime())){
-            dateText="変更日時: "+date.toLocaleString("ja-JP");
-          }
-        }
-
-        const row=document.createElement("div");
-        row.className="history-item";
-
-        const info=document.createElement("div");
-        const nameElement=document.createElement("div");
-        nameElement.className="history-name";
-        nameElement.textContent=username;
-
-        const dateElement=document.createElement("div");
-        dateElement.className="date";
-        dateElement.textContent=dateText;
-
-        info.append(nameElement,dateElement);
-
-        const copy=document.createElement("button");
-        copy.className="small secondary";
-        copy.textContent="コピー";
-        copy.onclick=()=>copyText(username);
-
-        row.append(info,copy);
-        historyBox.appendChild(row);
-      });
-    }
+    $("info").style.whiteSpace="pre-line";
 
     $("result").classList.remove("hidden");
+
     setStatus("取得完了！");
+
   }catch(error){
-    setStatus("エラー: "+error.message,true);
+    console.error(error);
+
+    setStatus(
+      "取得エラー: "+error.message+
+      "（通信環境・APIの状態を確認してください）",
+      true
+    );
+
   }finally{
     $("searchBtn").disabled=false;
   }
@@ -281,7 +273,7 @@ async function copyText(text){
   try{
     await navigator.clipboard.writeText(String(text));
     setStatus("コピーしました！");
-  }catch(e){
+  }catch(error){
     const area=document.createElement("textarea");
     area.value=String(text);
     document.body.appendChild(area);
@@ -293,28 +285,24 @@ async function copyText(text){
 }
 
 function copyAll(){
-  const lines=[
-    "Current Name: "+currentName,
-    "UUID: "+currentUUID,
-    "",
-    "Name History:",
-    ...currentHistory.map(item=>
-      (item.username || item.name || "")+
-      (item.changed_at || item.changedToAt
-        ? " - "+new Date(item.changed_at || item.changedToAt).toLocaleString("ja-JP")
-        : "")
-    )
-  ];
-  copyText(lines.join("\n"));
+  copyText(
+    "Minecraft Player Information\n"+
+    "Name: "+currentName+"\n"+
+    "UUID: "+currentUUID+"\n"+
+    "Face Image: "+headURL+"\n"+
+    "Body Image: "+bodyURL
+  );
 }
 
-function openImage(){
-  if(imageURL) window.open(imageURL,"_blank");
+function openImage(type){
+  const url=type==="head"?headURL:bodyURL;
+  if(url)window.open(url,"_blank");
 }
 
-$("uuidInput").addEventListener("keydown",e=>{
-  if(e.key==="Enter") searchPlayer();
+$("uuidInput").addEventListener("keydown",event=>{
+  if(event.key==="Enter")searchPlayer();
 });
 </script>
+
 </body>
 </html>
