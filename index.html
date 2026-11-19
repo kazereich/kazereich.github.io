@@ -1,48 +1,314 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <title>簡易暴言チェッカー</title>
-    <style>
-        body { font-family: sans-serif; margin: 40px; background: #f4f4f9; }
-        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        textarea { width: 100%; height: 100px; padding: 10px; margin-top: 10px; box-sizing: border-box; }
-        .result { margin-top: 20px; padding: 10px; border-radius: 4px; font-weight: bold; }
-        .safe { background: #d4edda; color: #155724; }
-        .danger { background: #f8d7da; color: #721c24; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0b1020">
+<title>ローカル暴言判定AI</title>
+<style>
+:root{color-scheme:dark;--bg:#090e1b;--panel:#111a2d;--panel2:#0e1728;--line:#263550;--text:#e8eefb;--muted:#91a1bb;--blue:#6ea8ff;--cyan:#5eead4;--red:#fb7185;--amber:#fbbf24;--green:#4ade80;--shadow:0 16px 44px #0005}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(1100px 550px at 80% -10%,#1c3156 0%,transparent 62%),var(--bg);color:var(--text);font-family:Inter,"Noto Sans JP",system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh}
+button,input,textarea,select{font:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:10px;color:var(--text);background:#1a2942;padding:10px 14px;transition:.15s}button:hover{filter:brightness(1.14);transform:translateY(-1px)}button:disabled{opacity:.4;cursor:not-allowed;transform:none}.primary{background:linear-gradient(135deg,#3978dc,#4b60c9);border-color:#638fe1}.good{background:#12382f;border-color:#23634f}.bad{background:#401e2b;border-color:#743549}.ghost{background:#111c30}.warn{background:#40331b;border-color:#725522}.small{padding:6px 9px;font-size:12px}.dangerText{color:var(--red)}.muted{color:var(--muted)}
+header{max-width:1180px;margin:auto;padding:26px 22px 12px;display:flex;align-items:center;justify-content:space-between;gap:16px}.brand{display:flex;align-items:center;gap:13px}.logo{width:45px;height:45px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(145deg,#3978dc,#36b7aa);font-size:23px;box-shadow:0 8px 24px #2864bd55}.brand h1{font-size:20px;margin:0;letter-spacing:.02em}.brand p{margin:4px 0 0;color:var(--muted);font-size:12px}.status{display:flex;align-items:center;gap:7px;color:#a8efd6;background:#102a2b;border:1px solid #22564f;padding:8px 11px;border-radius:20px;font-size:12px;white-space:nowrap}.dot{width:7px;height:7px;background:var(--green);border-radius:50%;box-shadow:0 0 10px #4ade80}
+main{max-width:1180px;margin:auto;padding:10px 22px 42px}.notice{border:1px solid #67552a;background:#2a2416;color:#f5df9b;border-radius:12px;padding:12px 15px;font-size:12px;line-height:1.7;margin:4px 0 17px}.notice strong{color:#fff0bd}.tabs{display:flex;gap:7px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:18px}.tab{background:transparent;color:var(--muted);border-color:transparent}.tab.active{color:#fff;background:#1a2a45;border-color:#324967}
+.panel{background:linear-gradient(180deg,#121d32ee,#0f1829ee);border:1px solid var(--line);border-radius:17px;padding:20px;box-shadow:var(--shadow)}.grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(300px,.75fr);gap:17px}.sectionTitle{font-size:15px;font-weight:700;margin:0 0 13px}.sub{color:var(--muted);font-size:12px;line-height:1.7}.fieldLabel{display:block;font-size:12px;color:#bdcbe0;margin:0 0 7px}textarea,input[type=text],select{width:100%;border:1px solid #334563;background:#0a1324;color:var(--text);border-radius:10px;padding:12px;outline:none}textarea:focus,input:focus,select:focus{border-color:#6ea8ff;box-shadow:0 0 0 3px #6ea8ff22}textarea{min-height:142px;resize:vertical;line-height:1.65}.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.actions{display:flex;gap:9px;align-items:center;margin-top:12px}.resultPanel{display:flex;flex-direction:column;min-height:100%}.resultTop{display:flex;justify-content:space-between;gap:10px;align-items:center}.pill{font-size:11px;padding:5px 9px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}.scoreWrap{display:grid;grid-template-columns:140px 1fr;gap:18px;align-items:center;margin:23px 0 15px}.gauge{width:138px;height:138px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--blue) 0deg,#263550 0deg);position:relative}.gauge:before{content:"";position:absolute;inset:9px;background:#111b2e;border-radius:50%}.gaugeInner{z-index:1;text-align:center}.gaugeNum{font-size:29px;font-weight:800;letter-spacing:-1px}.gaugeCaption{font-size:10px;color:var(--muted);margin-top:2px}.verdict{font-size:22px;font-weight:800;margin-bottom:6px}.verdict.badText{color:var(--red)}.verdict.goodText{color:var(--green)}.bar{height:8px;background:#26344d;border-radius:10px;overflow:hidden;margin:10px 0}.bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#4b96ee,#fb7185);border-radius:10px;transition:width .25s}.ruleLine{height:1px;background:var(--line);margin:15px 0}.detailList{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.chip{font-size:11px;border:1px solid #46536a;background:#1b2940;color:#c9d8ed;padding:5px 8px;border-radius:7px}.chip.hit{border-color:#8e3e55;background:#3a1d2a;color:#ffb0bf}.emptyState{color:#74839c;font-size:13px;line-height:1.8;text-align:center;padding:25px 8px}.feedbackArea{margin-top:auto;padding-top:15px}.feedbackArea p{font-size:12px;color:var(--muted);margin:0 0 9px}.feedbackBtns{display:grid;grid-template-columns:1fr 1fr;gap:9px}.feedbackResult{font-size:12px;padding:10px;border-radius:9px;background:#102a25;border:1px solid #285749;color:#a9efd5;margin-top:9px;display:none}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:17px}.stat{padding:13px 14px;background:#0c1628;border:1px solid var(--line);border-radius:12px}.stat span{display:block;color:var(--muted);font-size:11px}.stat strong{font-size:22px;display:block;margin-top:5px}.twoCol{display:grid;grid-template-columns:1fr 1fr;gap:15px}.listBox{border:1px solid var(--line);border-radius:12px;overflow:hidden}.listHead{padding:11px 13px;background:#16243a;display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700}.listBody{max-height:360px;overflow:auto}.listItem{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 12px;border-top:1px solid #263550;font-size:13px}.listItem:first-child{border-top:0}.listItem .term{overflow-wrap:anywhere}.itemMeta{font-size:10px;color:var(--muted);margin-top:3px}.addRow{display:flex;gap:7px;padding:11px;border-top:1px solid var(--line)}.addRow input{min-width:0}.emptyList{color:#73829c;font-size:12px;padding:18px;text-align:center}.miniBtn{padding:5px 8px;font-size:11px;flex:none}.learningCards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:15px}.learnCard{background:#0b1526;border:1px solid var(--line);border-radius:12px;padding:13px}.learnCard span{font-size:11px;color:var(--muted)}.learnCard strong{display:block;font-size:22px;margin-top:4px}.history{border:1px solid var(--line);border-radius:12px;overflow:hidden}.historyRow{padding:12px 14px;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}.historyRow:first-child{border-top:0}.historyText{font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere}.historyMeta{color:var(--muted);font-size:11px;margin-top:5px}.labelBadge{font-size:10px;padding:4px 7px;border-radius:6px;white-space:nowrap}.labelBadge.off{background:#3b1c2a;color:#ffb4c2}.labelBadge.safe{background:#12382f;color:#9cebd2}.footerNote{margin-top:17px;color:#75849d;font-size:11px;line-height:1.8}.hidden{display:none!important}.thresholdRow{display:flex;align-items:center;gap:10px;margin-top:12px;color:var(--muted);font-size:12px}.thresholdRow input{width:auto}.fileInput{display:none}.jsonTools{display:flex;gap:8px;flex-wrap:wrap}.inlineNotice{margin-top:10px;color:var(--muted);font-size:11px;line-height:1.6}.toast{position:fixed;right:20px;bottom:20px;background:#14243a;border:1px solid #405a7d;color:#e8f1ff;padding:12px 15px;border-radius:10px;box-shadow:var(--shadow);font-size:13px;z-index:20;opacity:0;transform:translateY(10px);pointer-events:none;transition:.2s}.toast.show{opacity:1;transform:translateY(0)}
+@media(max-width:800px){.grid{grid-template-columns:1fr}.twoCol{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.learningCards{grid-template-columns:repeat(3,1fr)}header{align-items:flex-start}.status{font-size:10px}}
+@media(max-width:480px){header{padding:18px 14px 10px}.brand h1{font-size:17px}.brand p{font-size:10px}.logo{width:39px;height:39px}main{padding:8px 13px 30px}.panel{padding:15px}.scoreWrap{grid-template-columns:112px 1fr;gap:12px}.gauge{width:110px;height:110px}.gaugeNum{font-size:24px}.verdict{font-size:18px}.learningCards{grid-template-columns:1fr 1fr}.learningCards .learnCard:last-child{grid-column:span 2}.actions{flex-wrap:wrap}.actions button{flex:1}}
+</style>
 </head>
 <body>
-    <div class="container">
-        <h2>簡易暴言・不適切発言チェッカー（オフライン高速判定）</h2>
-        <p>テキストを入力すると、外部APIを使わずに瞬時に判定します。</p>
-        <textarea id="inputText" placeholder="ここに入力してください..."></textarea>
-        <div id="resultBox" class="result safe">判定結果: 安全です</div>
+<header>
+  <div class="brand"><div class="logo">🧠</div><div><h1>ローカル暴言判定AI</h1><p>Offline · Adaptive text moderation · No external API</p></div></div>
+  <div class="status"><i class="dot"></i>端末内で動作中・通信なし</div>
+</header>
+<main>
+  <div class="notice"><strong>このAIについて：</strong>これは事前学習済みの大規模LLMではなく、単語・文字の特徴と文章全体のパターンを使う、端末内で継続学習するテキスト分類AIです。外部APIの回数制限はありませんが、処理速度・保存量は端末の性能とブラウザの保存容量に依存します。人間の評価を重ねるほど、このアプリ内の学習データに合わせて判定が改善します。</div>
+  <nav class="tabs">
+    <button class="tab active" data-tab="check">判定する</button>
+    <button class="tab" data-tab="words">暴言・例外リスト</button>
+    <button class="tab" data-tab="learning">学習・判定履歴</button>
+    <button class="tab" data-tab="data">データ管理</button>
+  </nav>
+
+  <section id="tab-check">
+    <div class="grid">
+      <div class="panel">
+        <h2 class="sectionTitle">メッセージを判定</h2>
+        <label class="fieldLabel" for="message">チェックしたい文章</label>
+        <textarea id="message" maxlength="5000" placeholder="例：ゲーム好きだしね&#10;例：お前は本当に最低だ&#10;&#10;文章を入力して「判定する」を押してください。"></textarea>
+        <div class="row" style="justify-content:space-between;margin-top:7px"><span class="sub">最大5,000文字 · 入力内容は外部へ送信されません</span><span class="sub" id="charCount">0 / 5000</span></div>
+        <div class="actions"><button class="primary" id="analyzeBtn">✦ 判定する</button><button class="ghost" id="clearBtn">クリア</button><button class="ghost" id="exampleBtn">サンプルを入力</button></div>
+        <div class="thresholdRow"><label for="threshold">暴言とみなすしきい値：</label><input type="range" id="threshold" min="40" max="90" step="5" value="60"><strong id="thresholdValue">60%</strong></div>
+        <p class="inlineNotice">確率はモデルの推定スコアです。法律上・運営上の確定判断ではありません。皮肉、引用、方言、隠語などは誤判定することがあるため、人間の確認を前提にしてください。</p>
+      </div>
+      <div class="panel resultPanel">
+        <div class="resultTop"><h2 class="sectionTitle" style="margin:0">判定結果</h2><span class="pill" id="modelStatus">モデル準備中</span></div>
+        <div id="emptyResult" class="emptyState">文章を入力して判定すると、<br>暴言である推定確率と判定理由を表示します。</div>
+        <div id="resultContent" class="hidden">
+          <div class="scoreWrap"><div class="gauge" id="gauge"><div class="gaugeInner"><div class="gaugeNum" id="probability">0%</div><div class="gaugeCaption">暴言の推定確率</div></div></div><div><div class="verdict" id="verdict">判定</div><div class="sub" id="verdictSub"></div><div class="bar"><i id="probBar"></i></div><div class="sub">判定基準：<strong id="thresholdText">60%</strong></div></div></div>
+          <div class="ruleLine"></div>
+          <div class="sub" style="font-weight:700;color:#dce8f8">判定に影響した特徴</div>
+          <div class="detailList" id="reasonTags"></div>
+          <p class="sub" id="reasonText" style="margin-top:10px"></p>
+          <div class="feedbackArea">
+            <p>このAIの判定は正しいですか？ 人間の評価を次回以降の学習に反映します。</p>
+            <div class="feedbackBtns"><button class="bad" id="punishBtn">⚑ 処罰する（暴言）</button><button class="good" id="noPunishBtn">✓ 処罰ではない</button></div>
+            <div class="feedbackResult" id="feedbackResult"></div>
+          </div>
+        </div>
+      </div>
     </div>
+    <div class="stats">
+      <div class="stat"><span>累計判定数</span><strong id="statChecks">0</strong></div>
+      <div class="stat"><span>学習した評価数</span><strong id="statFeedback">0</strong></div>
+      <div class="stat"><span>学習報酬ポイント</span><strong id="statReward">0</strong></div>
+      <div class="stat"><span>学習サンプル数</span><strong id="statSamples">0</strong></div>
+    </div>
+  </section>
 
-    <script>
-        const badWords = ["死ね", "殺す", "バカ", "アホ", "クズ", "ゴミ", "消えろ", "うざい", "キモい"];
-        
-        const input = document.getElementById('inputText');
-        const resultBox = document.getElementById('resultBox');
+  <section id="tab-words" class="hidden">
+    <div class="panel">
+      <h2 class="sectionTitle">単語・文章パターンの管理</h2>
+      <p class="sub" style="margin-top:-6px;margin-bottom:16px">登録した暴言語句は判定時の手がかりになります。例外パターンは「この文脈では暴言ではない」という学習データとして扱います。単語1つだけで決めつけず、文章全体の学習結果と組み合わせます。</p>
+      <div class="twoCol">
+        <div class="listBox"><div class="listHead"><span>暴言リスト</span><span class="pill" id="insultCount">0件</span></div><div class="listBody" id="insultList"></div><div class="addRow"><input type="text" id="newInsult" placeholder="暴言・侮辱表現を追加"><select id="insultWeight" style="width:105px"><option value="1">弱</option><option value="2" selected>中</option><option value="3">強</option></select><button class="primary small" id="addInsult">追加</button></div></div>
+        <div class="listBox"><div class="listHead"><span>例外パターン・安全な表現</span><span class="pill" id="safeCount">0件</span></div><div class="listBody" id="safeList"></div><div class="addRow"><input type="text" id="newSafe" placeholder="例：ゲーム好きだしね"><button class="good small" id="addSafe">例外として学習</button></div></div>
+      </div>
+      <p class="footerNote">例外を追加すると、文章全体を「処罰ではない」とする教師データにも登録されます。たとえば「shine（光り輝け）」のように一部の文字列が暴言語と似ていても、周囲の文脈を含む例文として学習できます。学習した結果はJSONに書き出して別の端末へ移せます。</p>
+    </div>
+  </section>
 
-        input.addEventListener('input', () => {
-            const text = input.value;
-            let found = [];
-            badWords.forEach(word => {
-                if (text.includes(word)) {
-                    found.push(word);
-                }
-            });
+  <section id="tab-learning" class="hidden">
+    <div class="panel">
+      <h2 class="sectionTitle">人間の評価による学習</h2>
+      <div class="learningCards">
+        <div class="learnCard"><span>正しい判定への加点</span><strong style="color:var(--green)">+1 pt</strong></div>
+        <div class="learnCard"><span>間違った判定への減点</span><strong style="color:var(--red)">−1 pt</strong></div>
+        <div class="learnCard"><span>更新方式</span><strong style="font-size:16px">オンライン学習</strong></div>
+      </div>
+      <p class="sub" style="margin:0 0 15px">判定後に人間が「処罰する／処罰ではない」を選ぶと、その文章を正解ラベル付きで保存し、文字の並び・単語・前後の組み合わせを使う分類モデルを更新します。AIが60%以上で処罰、または60%未満で処罰なしと判定し、人間の評価と一致した場合は+1点。不一致なら−1点です。ポイントは学習状況の目安であり、AIの性能を保証するものではありません。</p>
+      <div class="row" style="justify-content:space-between;margin:12px 0"><h3 class="sectionTitle" style="margin:0">最近の学習・判定履歴</h3><span class="pill" id="historyCount">0件</span></div>
+      <div class="history" id="historyList"><div class="emptyList">まだ履歴はありません。</div></div>
+    </div>
+  </section>
 
-            if (found.length > 0) {
-                resultBox.className = 'result danger';
-                resultBox.innerText = `警告: 不適切な表現（暴言）が含まれている可能性があります: ${found.join(', ')}`;
-            } else {
-                resultBox.className = 'result safe';
-                resultBox.innerText = '判定結果: 安全です';
-            }
-        });
-    </script>
+  <section id="tab-data" class="hidden">
+    <div class="panel">
+      <h2 class="sectionTitle">学習データの保存・読み込み</h2>
+      <p class="sub" style="margin-top:-5px">モデルの重み、暴言リスト、例外パターン、人間の評価、報酬ポイント、履歴をJSONファイルにまとめて保存できます。別のブラウザやPCに移す場合も、書き出したJSONを読み込んでください。</p>
+      <div class="jsonTools" style="margin:16px 0"><button class="primary" id="exportBtn">⬇ JSONで保存</button><button class="ghost" id="importBtn">⬆ JSONを読み込む</button><input class="fileInput" id="importFile" type="file" accept=".json,application/json"><button class="warn" id="resetBtn">初期状態にリセット</button></div>
+      <div class="ruleLine"></div>
+      <div class="twoCol"><div><h3 class="sectionTitle">自動保存</h3><p class="sub">このブラウザのローカルストレージに、判定・学習のたびに自動保存します。ブラウザのデータ削除や別端末への移動に備え、定期的にJSON保存してください。</p><div class="pill" id="saveStatus">保存状態を確認中</div></div><div><h3 class="sectionTitle">データの内容</h3><div class="sub" id="dataSummary">読み込み中...</div></div></div>
+      <p class="footerNote">このHTMLは外部通信を行わず、CDN・外部API・追加ライブラリも使用しません。JSONの読み込みは本アプリ形式のファイルを対象とします。保存容量にはブラウザ側の上限があります。「無制限」のクラウド保存ではありません。</p>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+<script>
+'use strict';
+
+// ------------------------------------------------------------
+// Offline adaptive classifier: no external requests or libraries.
+// This is a compact supervised text classifier, not a pretrained LLM.
+// ------------------------------------------------------------
+const STORAGE_KEY = 'local_abuse_ai_v1';
+const DEFAULT_THRESHOLD = 60;
+const SEED_INSULTS = [
+  {term:'死ね',weight:3},{term:'しね',weight:3},{term:'消えろ',weight:3},{term:'くたばれ',weight:3},
+  {term:'殺すぞ',weight:3},{term:'死んで',weight:3},{term:'ゴミ',weight:2},{term:'ごみ',weight:2},
+  {term:'クズ',weight:2},{term:'くず',weight:2},{term:'カス',weight:2},{term:'かす',weight:2},
+  {term:'バカ',weight:2},{term:'ばか',weight:2},{term:'アホ',weight:2},{term:'あほ',weight:2},
+  {term:'キモい',weight:2},{term:'きもい',weight:2},{term:'うざい',weight:1},{term:'うぜえ',weight:2},
+  {term:'黙れ',weight:2},{term:'無能',weight:2},{term:'ブス',weight:2},{term:'雑魚',weight:1}
+];
+const SEED_SAFE = [
+  {term:'ゲーム好きだしね',kind:'文脈例外'},{term:'shine (光り輝け)',kind:'文脈例外'},
+  {term:'shine',kind:'英単語の例外'},{term:'光り輝け',kind:'文脈例外'},
+  {term:'死ぬほど好き',kind:'慣用表現'},{term:'死んだ魚を見た',kind:'通常の説明'},
+  {term:'「死ね」と言われた',kind:'引用・被害報告'},{term:'「死ね」と言われて悲しかった',kind:'引用・被害報告'},{term:'このバカンスは最高',kind:'似た文字列'},{term:'ゴミ箱',kind:'通常の名詞'},{term:'ゴミ拾い',kind:'通常の活動'},{term:'moonshine',kind:'英単語の例外'}
+];
+const SEED_TRAINING = [
+  ['死ね',1],['お前なんか消えろ',1],['くたばれよ',1],['お前は本当に無能だ',1],
+  ['きもいんだよ、あっち行け',1],['このゴミが',1],['バカ、ふざけるな',1],['お前は役立たずだ',1],
+  ['黙れ、このクズ',1],['お前なんて大嫌いだ',1],['雑魚すぎる、消えろ',1],['死んでしまえ',1],
+  ['ゲーム好きだしね',0],['shine (光り輝け)',0],['shine',0],['光り輝け',0],
+  ['彼は死ぬほどゲームが好き',0],['死んだ魚を見つけた',0],['「死ね」と言われて悲しかった',0],
+  ['このバカンスは最高だった',0],['今日はゲームをして遊んだ',0],['その考え方は面白いね',0],
+  ['この作品が好きです',0],['明日も一緒に頑張ろう',0]
+];
+
+let db = null;
+let lastPrediction = null;
+let tokenizer = null;
+try { if (typeof Intl !== 'undefined' && Intl.Segmenter) tokenizer = new Intl.Segmenter('ja',{granularity:'word'}); } catch(e) {}
+
+function freshDB(){
+  const training = SEED_TRAINING.map(([text,label],i)=>({text,label,source:'初期データ',time:Date.now()-((SEED_TRAINING.length-i)*1000)}));
+  return {format:'local-abuse-ai',version:1,threshold:DEFAULT_THRESHOLD,insults:structuredCloneSafe(SEED_INSULTS),safePatterns:structuredCloneSafe(SEED_SAFE),exceptions:[],training,weights:{},bias:-0.35,stats:{checks:0,feedback:0,reward:0,correct:0},history:[],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+}
+function structuredCloneSafe(v){return JSON.parse(JSON.stringify(v));}
+function normalize(s){return String(s||'').normalize('NFKC').toLowerCase().replace(/[\u200B-\u200D\uFEFF]/g,'').replace(/\s+/g,' ').trim();}
+function sigmoid(x){if(x>25)return .999999;if(x< -25)return .000001;return 1/(1+Math.exp(-x));}
+function addFeature(map,key,value){map.set(key,(map.get(key)||0)+value);}
+function extractFeatures(text){
+  const norm=normalize(text); const f=new Map(); if(!norm)return f;
+  const chars=Array.from(norm).slice(0,220); const charScale=1/Math.sqrt(Math.max(1,chars.length));
+  // Character n-grams help with Japanese words, spelling variants and partial context.
+  for(let n=2;n<=3;n++) for(let i=0;i<=chars.length-n;i++) addFeature(f,'c'+n+':'+chars.slice(i,i+n).join(''),charScale*(n===2?.72:.86));
+  // Word features and adjacent-word context when native Japanese segmentation exists.
+  let tokens=[];
+  if(tokenizer){ for(const item of tokenizer.segment(norm)){if(item.isWordLike)tokens.push(item.segment);} }
+  else { tokens=(norm.match(/[a-z0-9]+|[\u3040-\u30ff\u3400-\u9fff]+/g)||[]); }
+  tokens=tokens.slice(0,100);
+  tokens.forEach((t)=>addFeature(f,'w:'+t,1.0));
+  for(let i=0;i<tokens.length-1;i++) addFeature(f,'b:'+tokens[i]+'_'+tokens[i+1],.85);
+  // Whole-message pattern is deliberately weighted, but not used as the only signal.
+  addFeature(f,'exact:'+norm,1.65);
+  // A few structural/context flags.
+  if(/[「『"“].+[」』"”]/u.test(norm)) addFeature(f,'ctx:quoted',.3);
+  if(/(と言われ|って言われ|と書かれ|と投稿|と発言|被害|悲しかった|通報)/u.test(norm)) addFeature(f,'ctx:reporting',.8);
+  if(/(ほど好き|大好き|好きだし|好きです|光り輝|shining|shine)/u.test(norm)) addFeature(f,'ctx:benign-expression',.75);
+  return f;
+}
+function linearLogit(features){let z=Number(db.bias)||0;for(const [k,v] of features){z+=(Number(db.weights[k])||0)*v;}return z;}
+function containsPattern(norm,term,isInsult=false){
+  if(!term)return false;
+  // Latin words are matched as words (so "shine" does not match "moonshine").
+  if(/^[a-z0-9_]+$/i.test(term)){return new RegExp('(^|[^a-z0-9_])'+term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'($|[^a-z0-9_])','i').test(norm);}
+  let at=norm.indexOf(term);while(at!==-1){
+    if(isInsult && Array.from(term).length<=2){
+      const before=Array.from(norm.slice(0,at)).pop()||'';const after=Array.from(norm.slice(at+term.length))[0]||'';
+      const compoundChar=ch=>!!ch&&/[\p{Script=Han}\p{Script=Katakana}]/u.test(ch);
+      // Avoid fragments inside ordinary compounds such as バカンス / ゴミ箱 / カスタム.
+      if(compoundChar(before)||compoundChar(after)){at=norm.indexOf(term,at+1);continue;}
+    }
+    return true;
+  }return false;
+}
+function computeLexicon(text){
+  const norm=normalize(text); const hitInsults=[]; const hitSafe=[]; let bonus=0;
+  const matchedSafe=db.safePatterns.map(x=>({item:x,term:normalize(x.term)})).filter(x=>containsPattern(norm,x.term,false));
+  for(const x of matchedSafe){hitSafe.push(x.item.term);bonus-=1.05;}
+  for(const item of db.insults){const term=normalize(item.term);if(!containsPattern(norm,term,true))continue;
+    // If a human-confirmed safe phrase contains the same short string, treat it as context, not an insult hit.
+    const covered=matchedSafe.some(x=>x.term.includes(term)&&norm.includes(x.term));
+    if(!covered){hitInsults.push(item.term);bonus+=0.68*(Number(item.weight)||1);}
+  }
+  // Exact human-confirmed exceptions receive a stronger contextual correction.
+  const exactException=db.exceptions.find(x=>normalize(x.text)===norm);
+  if(exactException) bonus-=3.0;
+  return {hitInsults,hitSafe,exactException,bonus};
+}
+function predict(text){
+  const features=extractFeatures(text);const lex=computeLexicon(text);
+  let logit=linearLogit(features)+lex.bonus;
+  const p=sigmoid(logit);
+  const positive=[...features.entries()].map(([key,val])=>({key,val,impact:(Number(db.weights[key])||0)*val})).filter(x=>Math.abs(x.impact)>.08).sort((a,b)=>Math.abs(b.impact)-Math.abs(a.impact)).slice(0,5);
+  return {probability:p,features,lex,positive,threshold:(Number(db.threshold)||DEFAULT_THRESHOLD)/100};
+}
+function trainOne(sample,rate=.12){
+  const features=extractFeatures(sample.text);const y=sample.label?1:0;const p=sigmoid(linearLogit(features));const err=(y-p)*(Number(sample.weight)||1);
+  for(const [k,v] of features){const old=Number(db.weights[k])||0;const next=old+rate*(err*v-.0008*old);if(Math.abs(next)<.00001)delete db.weights[k];else db.weights[k]=Math.max(-7,Math.min(7,next));}
+  db.bias=Math.max(-8,Math.min(8,(Number(db.bias)||0)+rate*err*.45));
+}
+function initialTrain(){
+  // Fresh baseline training runs locally and is intentionally small for quick startup.
+  for(let epoch=0;epoch<34;epoch++) for(const s of db.training) trainOne(s,.13);
+}
+function incrementalTrain(newSample){
+  // Train on the new human label plus balanced replay from the full history to reduce forgetting.
+  const pool=db.training.filter(s=>s!==newSample);const pos=pool.filter(s=>s.label===1);const neg=pool.filter(s=>s.label===0);
+  const pick=(arr,n)=>{const a=arr.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a.slice(0,n);};
+  const replay=[...pick(pos,12),...pick(neg,12)];
+  for(let epoch=0;epoch<12;epoch++){trainOne(newSample,.15);for(const old of replay)trainOne(old,.075);}
+}
+function saveDB(){
+  try{db.updatedAt=new Date().toISOString();localStorage.setItem(STORAGE_KEY,JSON.stringify(db));setText('saveStatus','自動保存済み · '+new Date().toLocaleTimeString('ja-JP'));return true;}
+  catch(e){setText('saveStatus','自動保存に失敗（容量不足の可能性）');showToast('自動保存に失敗しました。JSONでバックアップしてください。');return false;}
+}
+function loadDB(){
+  try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw){db=freshDB();initialTrain();saveDB();return;}
+    const parsed=JSON.parse(raw);if(!parsed||parsed.format!=='local-abuse-ai')throw new Error('unknown format');
+    db={...freshDB(),...parsed};db.insults=Array.isArray(parsed.insults)?parsed.insults:structuredCloneSafe(SEED_INSULTS);db.safePatterns=Array.isArray(parsed.safePatterns)?parsed.safePatterns:structuredCloneSafe(SEED_SAFE);db.exceptions=Array.isArray(parsed.exceptions)?parsed.exceptions:[];db.training=Array.isArray(parsed.training)?parsed.training:[];db.weights=parsed.weights&&typeof parsed.weights==='object'?parsed.weights:{};db.stats={...{checks:0,feedback:0,reward:0,correct:0},...(parsed.stats||{})};db.history=Array.isArray(parsed.history)?parsed.history:[];if(!Object.keys(db.weights).length)initialTrain();
+  }catch(e){db=freshDB();initialTrain();saveDB();showToast('保存データを読み込めなかったため初期モデルを起動しました。');}
+}
+function setText(id,text){const el=document.getElementById(id);if(el)el.textContent=text;}
+let toastTimer=null;function showToast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2400);}
+function renderStats(){setText('statChecks',db.stats.checks.toLocaleString());setText('statFeedback',db.stats.feedback.toLocaleString());setText('statReward',(db.stats.reward>0?'+':'')+db.stats.reward.toLocaleString());setText('statSamples',db.training.length.toLocaleString());setText('modelStatus','学習済み · '+Object.keys(db.weights).length.toLocaleString()+'特徴');setText('dataSummary',`暴言語句：${db.insults.length}件 / 例外パターン：${db.safePatterns.length}件 / 人間の評価：${db.training.filter(x=>x.source!=='初期データ').length}件 / 学習重み：${Object.keys(db.weights).length.toLocaleString()}個`);}
+function renderLists(){
+  const il=document.getElementById('insultList');il.innerHTML='';setText('insultCount',db.insults.length+'件');
+  if(!db.insults.length)il.innerHTML='<div class="emptyList">登録された語句はありません。</div>';
+  db.insults.forEach((item,index)=>{const row=document.createElement('div');row.className='listItem';const left=document.createElement('div');left.className='term';left.textContent=item.term;const meta=document.createElement('div');meta.className='itemMeta';meta.textContent='強さ：'+(['','弱','中','強'][Number(item.weight)||1]);left.appendChild(meta);const del=document.createElement('button');del.className='miniBtn ghost';del.textContent='削除';del.onclick=()=>{db.insults.splice(index,1);saveDB();renderLists();renderStats();};row.append(left,del);il.appendChild(row);});
+  const sl=document.getElementById('safeList');sl.innerHTML='';setText('safeCount',db.safePatterns.length+'件');
+  if(!db.safePatterns.length)sl.innerHTML='<div class="emptyList">例外パターンはありません。</div>';
+  db.safePatterns.forEach((item,index)=>{const row=document.createElement('div');row.className='listItem';const left=document.createElement('div');left.className='term';left.textContent=item.term;const meta=document.createElement('div');meta.className='itemMeta';meta.textContent=item.kind||'例外';left.appendChild(meta);const del=document.createElement('button');del.className='miniBtn ghost';del.textContent='削除';del.onclick=()=>{db.safePatterns.splice(index,1);saveDB();renderLists();renderStats();};row.append(left,del);sl.appendChild(row);});
+}
+function renderHistory(){const root=document.getElementById('historyList');root.innerHTML='';setText('historyCount',db.history.length+'件');if(!db.history.length){root.innerHTML='<div class="emptyList">まだ履歴はありません。</div>';return;}
+  db.history.slice(0,60).forEach(h=>{const row=document.createElement('div');row.className='historyRow';const left=document.createElement('div');const txt=document.createElement('div');txt.className='historyText';txt.textContent=h.text;const meta=document.createElement('div');meta.className='historyMeta';meta.textContent=(h.time?new Date(h.time).toLocaleString('ja-JP'):'')+' · AI '+Math.round(h.probability*100)+'%'+(h.humanLabel===undefined?' · 未評価':` · 人間の評価：${h.humanLabel?'処罰':'処罰ではない'}`);left.append(txt,meta);const badge=document.createElement('span');badge.className='labelBadge '+(h.prediction?'off':'safe');badge.textContent=h.prediction?'AI：暴言':'AI：暴言ではない';row.append(left,badge);root.appendChild(row);});}
+function analyze(){
+  const text=document.getElementById('message').value.trim();if(!text){showToast('文章を入力してください。');return;}
+  const result=predict(text);db.stats.checks++;const threshold=(Number(db.threshold)||60)/100;const isOffensive=result.probability>=threshold;
+  lastPrediction={text,probability:result.probability,prediction:isOffensive,threshold,features:result.features,lex:result.lex,feedbackDone:false,time:Date.now()};
+  db.history.unshift({text,probability:result.probability,prediction:isOffensive,time:Date.now()});if(db.history.length>300)db.history.length=300;
+  showResult(lastPrediction,result);saveDB();renderStats();renderHistory();
+}
+function showResult(pred,result){
+  document.getElementById('emptyResult').classList.add('hidden');document.getElementById('resultContent').classList.remove('hidden');
+  const pct=Math.round(pred.probability*100);setText('probability',pct+'%');setText('verdict',pred.prediction?'暴言の可能性あり':'暴言の可能性は低い');
+  const verdict=document.getElementById('verdict');verdict.className='verdict '+(pred.prediction?'badText':'goodText');setText('verdictSub',pred.prediction?'設定したしきい値以上です。人間による最終確認を推奨します。':'設定したしきい値未満です。文脈によっては見逃しもあり得ます。');
+  const degrees=Math.round(pred.probability*360);const color=pred.prediction?'#fb7185':'#4ade80';document.getElementById('gauge').style.background=`conic-gradient(${color} ${degrees}deg,#263550 ${degrees}deg)`;document.getElementById('probBar').style.width=pct+'%';setText('thresholdText',Math.round(pred.threshold*100)+'%');
+  const tags=document.getElementById('reasonTags');tags.innerHTML='';let reasons=[];
+  if(pred.lex.hitInsults.length){pred.lex.hitInsults.forEach(x=>{const c=document.createElement('span');c.className='chip hit';c.textContent='暴言リスト：'+x;tags.appendChild(c);});reasons.push('登録済みの暴言語句と一致');}
+  if(pred.lex.hitSafe.length){pred.lex.hitSafe.forEach(x=>{const c=document.createElement('span');c.className='chip';c.textContent='例外語句：'+x;tags.appendChild(c);});reasons.push('例外・安全表現と一致');}
+  if(pred.lex.exactException){const c=document.createElement('span');c.className='chip';c.textContent='人間が確認した例外文';tags.appendChild(c);reasons.push('過去に人間が「処罰ではない」と確認した同一文章');}
+  pred.positive.slice(0,4).forEach(x=>{const c=document.createElement('span');c.className='chip';let label=x.key.replace(/^(c2:|c3:|w:|b:|exact:|ctx:)/,'');if(label.length>24)label=label.slice(0,24)+'…';c.textContent='学習特徴：'+label;tags.appendChild(c);});
+  if(!tags.children.length){const c=document.createElement('span');c.className='chip';c.textContent='明確な一致語句なし';tags.appendChild(c);}
+  setText('reasonText',reasons.join('。')+(reasons.length?'。':'')+' 判定は、文字の並び・単語・隣接する語・過去に学習した文例を組み合わせて算出しています。');
+  document.getElementById('feedbackResult').style.display='none';document.getElementById('punishBtn').disabled=false;document.getElementById('noPunishBtn').disabled=false;
+}
+function addHumanFeedback(label){
+  if(!lastPrediction){showToast('先に文章を判定してください。');return;}if(lastPrediction.feedbackDone){showToast('この判定には評価済みです。');return;}
+  const p=lastPrediction.probability;const aiLabel=lastPrediction.prediction?1:0;const correct=aiLabel===label;db.stats.feedback++;db.stats.correct+=correct?1:0;db.stats.reward+=correct?1:-1;
+  const sample={text:lastPrediction.text,label,source:'人間の評価',time:Date.now(),weight:1.25};db.training.push(sample);incrementalTrain(sample);
+  // A human correction of a flagged sentence becomes a stored contextual exception.
+  if(label===0 && (p>=lastPrediction.threshold || lastPrediction.lex.hitInsults.length>0)){
+    const normalized=normalize(lastPrediction.text);if(!db.exceptions.some(x=>normalize(x.text)===normalized))db.exceptions.unshift({text:lastPrediction.text,kind:'誤判定から学習',time:Date.now()});
+    if(!db.safePatterns.some(x=>normalize(x.term)===normalized))db.safePatterns.unshift({term:lastPrediction.text,kind:'人間が確認した文脈例外'});
+  }
+  const h=db.history.find(x=>x.time===lastPrediction.time&&x.text===lastPrediction.text);if(h)h.humanLabel=label;
+  lastPrediction.feedbackDone=true;document.getElementById('punishBtn').disabled=true;document.getElementById('noPunishBtn').disabled=true;
+  const box=document.getElementById('feedbackResult');box.style.display='block';box.textContent=(correct?'AIの判定と一致：+1ポイント':'AIの判定と不一致：−1ポイント')+'。学習データに追加し、モデルを更新しました。'+(label===0&&lastPrediction.lex.hitInsults.length?' この文章は文脈例外としても保存しました。':'');
+  saveDB();renderStats();renderLists();renderHistory();showToast('人間の評価を学習しました');
+}
+function addTrainingExample(text,label,source,alsoException=false){
+  text=String(text||'').trim();if(!text){showToast('文章を入力してください。');return false;}
+  const sample={text,label,source,time:Date.now(),weight:1.35};db.training.push(sample);incrementalTrain(sample);
+  if(alsoException){if(!db.exceptions.some(x=>normalize(x.text)===normalize(text)))db.exceptions.unshift({text,kind:'手動登録',time:Date.now()});}
+  saveDB();renderStats();renderHistory();return true;
+}
+
+// UI wiring
+for(const btn of document.querySelectorAll('.tab'))btn.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===btn));for(const id of ['check','words','learning','data'])document.getElementById('tab-'+id).classList.toggle('hidden',id!==btn.dataset.tab);if(btn.dataset.tab==='words')renderLists();if(btn.dataset.tab==='learning')renderHistory();if(btn.dataset.tab==='data')renderStats();});
+document.getElementById('message').addEventListener('input',e=>setText('charCount',e.target.value.length+' / 5000'));
+document.getElementById('analyzeBtn').addEventListener('click',analyze);
+document.getElementById('message').addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter')analyze();});
+document.getElementById('clearBtn').addEventListener('click',()=>{document.getElementById('message').value='';setText('charCount','0 / 5000');lastPrediction=null;document.getElementById('resultContent').classList.add('hidden');document.getElementById('emptyResult').classList.remove('hidden');});
+document.getElementById('exampleBtn').addEventListener('click',()=>{document.getElementById('message').value='ゲーム好きだしね';setText('charCount','8 / 5000');});
+document.getElementById('threshold').addEventListener('input',e=>{db.threshold=Number(e.target.value);setText('thresholdValue',e.target.value+'%');saveDB();});
+document.getElementById('punishBtn').addEventListener('click',()=>addHumanFeedback(1));
+document.getElementById('noPunishBtn').addEventListener('click',()=>addHumanFeedback(0));
+document.getElementById('addInsult').addEventListener('click',()=>{const term=document.getElementById('newInsult').value.trim();if(!term)return showToast('語句を入力してください。');if(db.insults.some(x=>normalize(x.term)===normalize(term)))return showToast('その語句はすでに登録されています。');db.insults.push({term,weight:Number(document.getElementById('insultWeight').value)||2});document.getElementById('newInsult').value='';saveDB();renderLists();renderStats();showToast('暴言リストに追加しました');});
+document.getElementById('newInsult').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('addInsult').click();});
+document.getElementById('addSafe').addEventListener('click',()=>{const term=document.getElementById('newSafe').value.trim();if(!term)return showToast('例外にする文章を入力してください。');if(!db.safePatterns.some(x=>normalize(x.term)===normalize(term)))db.safePatterns.push({term,kind:'手動登録'});addTrainingExample(term,0,'手動例外',true);document.getElementById('newSafe').value='';renderLists();showToast('例外文脈として登録し、学習しました');});
+document.getElementById('newSafe').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('addSafe').click();});
+document.getElementById('exportBtn').addEventListener('click',()=>{const payload={...db,exportedAt:new Date().toISOString()};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='local-abuse-ai-data-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);showToast('JSONファイルを保存しました');});
+document.getElementById('importBtn').addEventListener('click',()=>document.getElementById('importFile').click());
+document.getElementById('importFile').addEventListener('change',async e=>{const file=e.target.files&&e.target.files[0];if(!file)return;try{const parsed=JSON.parse(await file.text());if(!parsed||parsed.format!=='local-abuse-ai'||!Array.isArray(parsed.training)||!parsed.weights||typeof parsed.weights!=='object')throw new Error('形式が違います');if(!confirm('現在の学習データを、選択したJSONの内容で置き換えます。よろしいですか？'))return;db={...freshDB(),...parsed};db.insults=Array.isArray(parsed.insults)?parsed.insults:[];db.safePatterns=Array.isArray(parsed.safePatterns)?parsed.safePatterns:[];db.exceptions=Array.isArray(parsed.exceptions)?parsed.exceptions:[];db.training=parsed.training;db.weights=parsed.weights;db.stats={...{checks:0,feedback:0,reward:0,correct:0},...(parsed.stats||{})};db.history=Array.isArray(parsed.history)?parsed.history:[];saveDB();renderStats();renderLists();renderHistory();showToast('JSONデータを読み込みました');}catch(err){showToast('読み込み失敗：このアプリのJSONか確認してください。');}finally{e.target.value='';}});
+document.getElementById('resetBtn').addEventListener('click',()=>{if(!confirm('すべての追加学習・リスト・履歴を消して初期状態に戻します。JSONバックアップがなければ元に戻せません。実行しますか？'))return;db=freshDB();initialTrain();lastPrediction=null;saveDB();renderStats();renderLists();renderHistory();document.getElementById('resultContent').classList.add('hidden');document.getElementById('emptyResult').classList.remove('hidden');setText('thresholdValue',db.threshold+'%');document.getElementById('threshold').value=db.threshold;showToast('初期状態に戻しました');});
+
+// Start-up
+loadDB();document.getElementById('threshold').value=db.threshold||DEFAULT_THRESHOLD;setText('thresholdValue',(db.threshold||DEFAULT_THRESHOLD)+'%');renderStats();renderLists();renderHistory();setText('saveStatus','保存データを読み込みました');
+</script>
 </body>
 </html>
