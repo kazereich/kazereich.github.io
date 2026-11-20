@@ -25,10 +25,24 @@
         ::-webkit-scrollbar-track { background: #18181b; }
         ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 5px; border: 2px solid #18181b; }
         ::-webkit-scrollbar-thumb:hover { background: #52525b; }
-        .canvas-container { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #000; }
-        canvas { max-width: 100%; max-height: 100%; box-shadow: 0 10px 25px rgba(0,0,0,0.5); cursor: grab; background: #000; }
+        
+        .canvas-container { 
+            position: relative; 
+            background: #000; 
+        }
+        canvas { 
+            width: 100%; 
+            height: 100%; 
+            display: block;
+            cursor: grab; 
+        }
         canvas:active { cursor: grabbing; }
-        .grid-overlay { background-size: 50px 50px; background-image: linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px); pointer-events: none; }
+        
+        .grid-overlay { 
+            background-size: 50px 50px; 
+            background-image: linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px); 
+            pointer-events: none; 
+        }
     </style>
 </head>
 <body class="bg-zinc-950 text-zinc-300 h-screen overflow-hidden flex flex-col font-sans text-sm">
@@ -46,7 +60,7 @@
         function App() {
             // プロジェクト設定
             const [settings, setSettings] = useState({
-                res: "720p (HD)", width: 1280, height: 720, fps: 30, vBitrate: 3000000
+                res: "1080p (FHD)", width: 1920, height: 1080, fps: 30, vBitrate: 3000000
             });
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
             const [showGrid, setShowGrid] = useState(false);
@@ -62,7 +76,7 @@
             const [duration, setDuration] = useState(30); 
             const [timelineZoom, setTimelineZoom] = useState(1); 
 
-            // スクラブ（ドラッグで再生位置移動）状態
+            // スクラブ状態
             const [isScrubbing, setIsScrubbing] = useState(false);
 
             const [aiText, setAiText] = useState("");
@@ -74,19 +88,15 @@
             const [isDragging, setIsDragging] = useState(false);
             const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
-            // ----------------------------------------------------
-            // キャンバス描画・メディア同期ループ
-            // ----------------------------------------------------
+            // キャンバス描画ループ
             const renderCanvas = useCallback((timeNow) => {
                 const canvas = canvasRef.current;
                 if (!canvas) return;
                 const ctx = canvas.getContext('2d');
                 
-                // 背景クリア
                 ctx.fillStyle = '#000000';
                 ctx.fillRect(0, 0, settings.width, settings.height);
 
-                // メディアの同期
                 items.forEach(it => {
                     if ((it.type === 'video' || it.type === 'audio') && it.element) {
                         it.element.volume = it.volume !== undefined ? it.volume : 1;
@@ -108,7 +118,6 @@
 
                 const activeItems = items.filter(it => currentTime >= it.start && currentTime <= it.start + it.duration);
                 
-                // 描画
                 activeItems.sort((a, b) => a.layer - b.layer).forEach(item => {
                     if (item.type === 'audio') return;
 
@@ -320,7 +329,6 @@
 
             const generateAIVoice = async () => {
                 if (!aiText.trim()) return;
-                
                 try {
                     const queryRes = await fetch(`http://127.0.0.1:50021/audio_query?text=${encodeURIComponent(aiText)}&speaker=1`, { method: 'POST' });
                     const queryJson = await queryRes.json();
@@ -360,39 +368,25 @@
                 setAiText("");
             };
 
-            // ----------------------------------------------------
-            // タイムライン スクラブ操作
-            // ----------------------------------------------------
+            // スクラブ
             const updateTimeFromMouse = (e) => {
                 const bg = document.getElementById('timeline-bg');
                 if (!bg) return;
                 const rect = bg.getBoundingClientRect();
-                // 80pxは左側のヘッダー(Track名)の幅
                 const clickX = e.clientX - rect.left - 80;
-                
                 if (clickX >= 0) {
                     const totalWidth = duration * 100 * timelineZoom;
                     const newTime = (clickX / totalWidth) * duration;
                     setCurrentTime(Math.max(0, Math.min(newTime, duration)));
                 } else {
-                    setCurrentTime(0); // 80pxより左側にマウスが言った場合は0秒にする
+                    setCurrentTime(0);
                 }
             };
+            const handleTimelineMouseDown = (e) => { setIsScrubbing(true); updateTimeFromMouse(e); };
+            const handleTimelineMouseMove = (e) => { if (isScrubbing) updateTimeFromMouse(e); };
+            const handleTimelineMouseUp = () => setIsScrubbing(false);
 
-            const handleTimelineMouseDown = (e) => {
-                setIsScrubbing(true);
-                updateTimeFromMouse(e);
-            };
-
-            const handleTimelineMouseMove = (e) => {
-                if (!isScrubbing) return;
-                updateTimeFromMouse(e);
-            };
-
-            const handleTimelineMouseUp = () => {
-                setIsScrubbing(false);
-            };
-
+            // 書き出し
             const exportVideo = () => {
                 if (!canvasRef.current) return;
                 setIsRecording(true);
@@ -426,14 +420,10 @@
             };
 
             const selectedItem = items.find(it => it.id === selectedId);
-
-            const updateItem = (id, key, value) => {
-                setItems(prev => prev.map(it => it.id === id ? { ...it, [key]: value } : it));
-            };
+            const updateItem = (id, key, value) => setItems(prev => prev.map(it => it.id === id ? { ...it, [key]: value } : it));
 
             return (
                 <div className="flex flex-col h-full bg-zinc-950 font-sans text-zinc-300">
-                    {/* ヘッダー */}
                     <header className="h-14 bg-zinc-900 border-b border-zinc-800 flex justify-between items-center px-6 shrink-0 shadow-sm z-20">
                         <div className="flex items-center space-x-3 text-zinc-100">
                             <i className="fa-solid fa-clapperboard text-blue-500 text-xl"></i>
@@ -449,7 +439,6 @@
                         </div>
                     </header>
 
-                    {/* メイン領域 */}
                     <div className="flex flex-1 overflow-hidden">
                         
                         {/* 左：ツールバー */}
@@ -470,7 +459,6 @@
                                         <input type="file" className="hidden" accept="image/*,video/*,audio/*" onChange={handleFileUpload} />
                                     </label>
                                 </div>
-
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-zinc-400 uppercase">テキスト</label>
                                     <button onClick={addText} className="w-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded p-3 text-center transition">
@@ -478,35 +466,47 @@
                                         <span>テキストを追加</span>
                                     </button>
                                 </div>
-
                                 <div className="space-y-2 bg-zinc-850 p-3 rounded border border-zinc-700/50">
                                     <label className="text-xs font-bold text-zinc-400 uppercase flex items-center">
                                         <i className="fa-solid fa-robot mr-1.5 text-purple-400"></i> AI音声 & 字幕
                                     </label>
-                                    <textarea 
-                                        value={aiText} 
-                                        onChange={(e) => setAiText(e.target.value)} 
-                                        placeholder="喋らせる内容を入力..." 
-                                        className="w-full bg-zinc-950 border border-zinc-700 rounded p-2 text-sm focus:outline-none focus:border-purple-500 h-20 resize-none mt-2"
-                                    ></textarea>
-                                    <button onClick={generateAIVoice} className="w-full mt-2 bg-purple-600 hover:bg-purple-500 text-white py-1.5 rounded transition shadow">
-                                        生成してタイムラインに追加
-                                    </button>
+                                    <textarea value={aiText} onChange={(e) => setAiText(e.target.value)} placeholder="喋らせる内容を入力..." className="w-full bg-zinc-950 border border-zinc-700 rounded p-2 text-sm focus:outline-none focus:border-purple-500 h-20 resize-none mt-2"></textarea>
+                                    <button onClick={generateAIVoice} className="w-full mt-2 bg-purple-600 hover:bg-purple-500 text-white py-1.5 rounded transition shadow">生成してタイムラインに追加</button>
                                 </div>
                             </div>
                         </div>
 
-                        {/* 中央：キャンバス＆プレイヤー */}
+                        {/* 中央：キャンバス */}
                         <div className="flex-1 flex flex-col relative bg-zinc-950">
-                            <div className="absolute top-4 right-4 z-10">
+                            {/* 画面切り替え & グリッドボタン */}
+                            <div className="absolute top-4 right-4 z-10 flex space-x-2">
+                                <div className="bg-zinc-800/80 backdrop-blur border border-zinc-700 rounded flex shadow-lg overflow-hidden text-xs">
+                                    <button 
+                                        onClick={() => setSettings({...settings, res: "1080p (FHD)", width: 1920, height: 1080})} 
+                                        className={`px-3 py-1.5 transition flex items-center ${settings.width >= settings.height ? 'bg-blue-600 text-white font-bold' : 'text-zinc-400 hover:bg-zinc-700'}`}>
+                                        <i className="fa-solid fa-tv mr-1.5"></i>横長 (16:9)
+                                    </button>
+                                    <button 
+                                        onClick={() => setSettings({...settings, res: "ショート (9:16)", width: 1080, height: 1920})} 
+                                        className={`px-3 py-1.5 transition flex items-center border-l border-zinc-700 ${settings.width < settings.height ? 'bg-blue-600 text-white font-bold' : 'text-zinc-400 hover:bg-zinc-700'}`}>
+                                        <i className="fa-solid fa-mobile-screen mr-1.5"></i>縦長 (9:16)
+                                    </button>
+                                </div>
                                 <button onClick={() => setShowGrid(!showGrid)} className={`px-3 py-1.5 rounded bg-zinc-800/80 backdrop-blur border border-zinc-700 shadow-lg text-xs transition ${showGrid ? 'text-blue-400 border-blue-500/50' : 'text-zinc-400'}`}>
-                                    <i className="fa-solid fa-border-all mr-1"></i>グリッド表示
+                                    <i className="fa-solid fa-border-all mr-1"></i>グリッド
                                 </button>
                             </div>
 
-                            <div className="flex-1 p-6 flex items-center justify-center min-h-0">
-                                <div className={`canvas-container relative rounded shadow-2xl ring-1 ring-zinc-800 ${showGrid ? 'grid-overlay' : ''}`} 
-                                     style={{ aspectRatio: `${settings.width} / ${settings.height}`, maxHeight: '100%', maxWidth: '100%' }}>
+                            <div className="flex-1 p-6 flex items-center justify-center min-h-0 overflow-hidden">
+                                {/* アスペクト比を動的に維持するコンテナ */}
+                                <div className={`canvas-container rounded shadow-2xl ring-1 ring-zinc-800 ${showGrid ? 'grid-overlay' : ''}`} 
+                                     style={{ 
+                                         aspectRatio: `${settings.width} / ${settings.height}`,
+                                         width: settings.width >= settings.height ? '100%' : 'auto',
+                                         height: settings.width < settings.height ? '100%' : 'auto',
+                                         maxWidth: '100%',
+                                         maxHeight: '100%'
+                                     }}>
                                     <canvas
                                         ref={canvasRef}
                                         width={settings.width}
@@ -523,28 +523,21 @@
                             {/* コントロール */}
                             <div className="h-16 shrink-0 bg-zinc-900 border-t border-zinc-800 flex items-center justify-center px-4 space-x-6">
                                 <div className="text-lg font-mono text-blue-400 w-20 text-right">{currentTime.toFixed(2)}s</div>
-                                
                                 <button onClick={() => setCurrentTime(0)} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-zinc-800 transition"><i className="fa-solid fa-backward-step"></i></button>
-                                
                                 <button onClick={() => setIsPlaying(!isPlaying)} className="w-12 h-12 bg-zinc-200 text-zinc-900 hover:bg-white rounded-full flex items-center justify-center text-xl transition shadow-lg transform hover:scale-105">
                                     <i className={`fa-solid ${isPlaying ? 'fa-pause' : 'fa-play ml-1'}`}></i>
                                 </button>
-                                
                                 <button onClick={() => setIsPlaying(false)} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-zinc-800 transition"><i className="fa-solid fa-stop"></i></button>
-                                
                                 <div className="flex items-center space-x-2 pl-6 border-l border-zinc-800">
                                     <i className="fa-solid fa-gauge-high text-zinc-500"></i>
                                     <select value={playbackRate} onChange={(e) => setPlaybackRate(Number(e.target.value))} className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 outline-none text-xs">
-                                        <option value="0.5">0.5x</option>
-                                        <option value="1">1.0x</option>
-                                        <option value="1.5">1.5x</option>
-                                        <option value="2">2.0x</option>
+                                        <option value="0.5">0.5x</option><option value="1">1.0x</option><option value="1.5">1.5x</option><option value="2">2.0x</option>
                                     </select>
                                 </div>
                             </div>
                         </div>
 
-                        {/* 右：プロパティ（インスペクタ） */}
+                        {/* 右：プロパティ */}
                         <div className="w-80 bg-zinc-900 border-l border-zinc-800 flex flex-col shrink-0">
                             <div className="px-4 py-3 bg-zinc-850 border-b border-zinc-800 font-bold text-zinc-200 flex justify-between items-center">
                                 <span><i className="fa-solid fa-sliders mr-2"></i>プロパティ</span>
@@ -604,7 +597,6 @@
                                                         </div>
                                                     </div>
                                                 )}
-
                                                 <div className="flex space-x-2">
                                                     <div className="flex-1">
                                                         <label className="block text-xs text-zinc-400 mb-1">回転 (度)</label>
@@ -621,28 +613,14 @@
                                         {selectedItem.type === 'text' && (
                                             <div className="space-y-3 pb-4 border-b border-zinc-800">
                                                 <h4 className="text-xs font-bold text-zinc-500">テキスト装飾</h4>
-                                                <div>
-                                                    <textarea value={selectedItem.text} onChange={(e) => updateItem(selectedId, 'text', e.target.value)} className="w-full bg-zinc-950 border border-zinc-700 rounded p-2 h-16 outline-none focus:border-blue-500"></textarea>
+                                                <div><textarea value={selectedItem.text} onChange={(e) => updateItem(selectedId, 'text', e.target.value)} className="w-full bg-zinc-950 border border-zinc-700 rounded p-2 h-16 outline-none focus:border-blue-500"></textarea></div>
+                                                <div className="flex items-center space-x-2">
+                                                    <div className="flex-1"><label className="block text-xs text-zinc-400 mb-1">サイズ</label><input type="number" value={selectedItem.fontSize} onChange={(e) => updateItem(selectedId, 'fontSize', Number(e.target.value))} className="w-full bg-zinc-950 border border-zinc-700 rounded p-1.5 outline-none"/></div>
+                                                    <div><label className="block text-xs text-zinc-400 mb-1">文字色</label><input type="color" value={selectedItem.color} onChange={(e) => updateItem(selectedId, 'color', e.target.value)} className="w-10 h-8 rounded cursor-pointer bg-transparent border-0"/></div>
                                                 </div>
                                                 <div className="flex items-center space-x-2">
-                                                    <div className="flex-1">
-                                                        <label className="block text-xs text-zinc-400 mb-1">サイズ</label>
-                                                        <input type="number" value={selectedItem.fontSize} onChange={(e) => updateItem(selectedId, 'fontSize', Number(e.target.value))} className="w-full bg-zinc-950 border border-zinc-700 rounded p-1.5 outline-none"/>
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-xs text-zinc-400 mb-1">文字色</label>
-                                                        <input type="color" value={selectedItem.color} onChange={(e) => updateItem(selectedId, 'color', e.target.value)} className="w-10 h-8 rounded cursor-pointer bg-transparent border-0"/>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center space-x-2">
-                                                    <div className="flex-1">
-                                                        <label className="block text-xs text-zinc-400 mb-1">縁取り太さ</label>
-                                                        <input type="number" min="0" value={selectedItem.strokeWidth || 0} onChange={(e) => updateItem(selectedId, 'strokeWidth', Number(e.target.value))} className="w-full bg-zinc-950 border border-zinc-700 rounded p-1.5 outline-none"/>
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-xs text-zinc-400 mb-1">縁取り色</label>
-                                                        <input type="color" value={selectedItem.strokeColor || '#000000'} onChange={(e) => updateItem(selectedId, 'strokeColor', e.target.value)} className="w-10 h-8 rounded cursor-pointer bg-transparent border-0"/>
-                                                    </div>
+                                                    <div className="flex-1"><label className="block text-xs text-zinc-400 mb-1">縁取り太さ</label><input type="number" min="0" value={selectedItem.strokeWidth || 0} onChange={(e) => updateItem(selectedId, 'strokeWidth', Number(e.target.value))} className="w-full bg-zinc-950 border border-zinc-700 rounded p-1.5 outline-none"/></div>
+                                                    <div><label className="block text-xs text-zinc-400 mb-1">縁取り色</label><input type="color" value={selectedItem.strokeColor || '#000000'} onChange={(e) => updateItem(selectedId, 'strokeColor', e.target.value)} className="w-10 h-8 rounded cursor-pointer bg-transparent border-0"/></div>
                                                 </div>
                                             </div>
                                         )}
@@ -653,11 +631,7 @@
                                                 <div>
                                                     <label className="block text-xs text-zinc-400 mb-1">登場アニメーション</label>
                                                     <select value={selectedItem.animation || "none"} onChange={(e) => updateItem(selectedId, 'animation', e.target.value)} className="w-full bg-zinc-950 border border-zinc-700 rounded p-1.5 outline-none focus:border-blue-500">
-                                                        <option value="none">なし</option>
-                                                        <option value="fade">フェードイン</option>
-                                                        <option value="slideUp">スライドアップ</option>
-                                                        <option value="zoom">ズームイン</option>
-                                                        <option value="spin">スピン登場</option>
+                                                        <option value="none">なし</option><option value="fade">フェードイン</option><option value="slideUp">スライドアップ</option><option value="zoom">ズームイン</option><option value="spin">スピン登場</option>
                                                     </select>
                                                 </div>
                                             </div>
@@ -681,7 +655,7 @@
                         </div>
                     </div>
 
-                    {/* タイムライン領域（スクラブイベントを追加） */}
+                    {/* タイムライン領域 */}
                     <div className="h-72 bg-zinc-900 border-t border-zinc-800 flex flex-col select-none shrink-0">
                         <div className="flex bg-zinc-850 border-b border-zinc-800 px-4 py-1.5 items-center justify-between shadow-sm z-10">
                             <div className="flex items-center space-x-6">
@@ -698,20 +672,13 @@
                             </div>
                         </div>
                         
-                        <div 
-                            className="flex-1 overflow-auto relative bg-zinc-950"
-                            onMouseDown={handleTimelineMouseDown}
-                            onMouseMove={handleTimelineMouseMove}
-                            onMouseUp={handleTimelineMouseUp}
-                            onMouseLeave={handleTimelineMouseUp}
-                        >
+                        <div className="flex-1 overflow-auto relative bg-zinc-950"
+                             onMouseDown={handleTimelineMouseDown} onMouseMove={handleTimelineMouseMove} onMouseUp={handleTimelineMouseUp} onMouseLeave={handleTimelineMouseUp}>
                             <div id="timeline-bg" className="relative" style={{ width: `${80 + duration * 100 * timelineZoom}px`, minHeight: '100%' }}>
                                 <div className="h-7 border-b border-zinc-800 bg-zinc-900 sticky top-0 z-20" style={{ paddingLeft: '80px' }}>
                                     {[...Array(Math.ceil(duration) + 1)].map((_, i) => (
                                         <div key={i} className="absolute text-[10px] font-mono text-zinc-500 border-l border-zinc-700 pl-1 h-full pt-1" 
-                                             style={{ left: `${80 + (i * 100 * timelineZoom)}px` }}>
-                                            {i}s
-                                        </div>
+                                             style={{ left: `${80 + (i * 100 * timelineZoom)}px` }}>{i}s</div>
                                     ))}
                                 </div>
 
@@ -723,20 +690,14 @@
                                         
                                         {items.filter(it => it.layer === layerNum).map(item => (
                                             <div key={item.id} 
-                                                 onMouseDown={(e) => { 
-                                                     setSelectedId(item.id); 
-                                                 }}
+                                                 onMouseDown={() => setSelectedId(item.id)}
                                                  className={`absolute h-8 rounded cursor-pointer text-xs px-2 flex items-center overflow-hidden shadow transition-colors ${
-                                                     item.id === selectedId 
-                                                     ? 'bg-blue-600 border border-blue-400 ring-2 ring-blue-500/50 z-10' 
+                                                     item.id === selectedId ? 'bg-blue-600 border border-blue-400 ring-2 ring-blue-500/50 z-10' 
                                                      : item.type === 'text' ? 'bg-emerald-700/80 border border-emerald-600/50' 
                                                      : item.type === 'audio' ? 'bg-purple-700/80 border border-purple-600/50' 
                                                      : 'bg-amber-700/80 border border-amber-600/50'
                                                  }`}
-                                                 style={{
-                                                     left: `${80 + (item.start * 100 * timelineZoom)}px`,
-                                                     width: `${item.duration * 100 * timelineZoom}px`
-                                                 }}>
+                                                 style={{ left: `${80 + (item.start * 100 * timelineZoom)}px`, width: `${item.duration * 100 * timelineZoom}px` }}>
                                                  <i className={`mr-1.5 opacity-70 fa-solid ${item.type==='text'?'fa-t':item.type==='audio'?'fa-music':'fa-image'}`}></i>
                                                  <span className="truncate flex-1 font-medium">{item.name || item.text}</span>
                                             </div>
@@ -744,7 +705,6 @@
                                     </div>
                                 ))}
 
-                                {/* 再生ヘッド（赤い線） */}
                                 <div className="absolute top-0 bottom-0 w-[1.5px] bg-red-500 pointer-events-none z-30 shadow-[0_0_4px_rgba(239,68,68,0.8)]"
                                      style={{ left: `${80 + (currentTime * 100 * timelineZoom)}px` }}>
                                      <div className="absolute -top-0 -ml-[5.5px] w-0 h-0 border-l-[6px] border-r-[6px] border-t-[8px] border-transparent border-t-red-500"></div>
@@ -772,14 +732,8 @@
                                         </select>
                                     </div>
                                     <div className="flex space-x-3">
-                                        <div className="flex-1">
-                                            <label className="block text-xs font-bold text-zinc-400 mb-1.5 uppercase">フレームレート</label>
-                                            <input type="number" value={settings.fps} onChange={e => setSettings({...settings, fps: Number(e.target.value)})} className="w-full bg-zinc-950 border border-zinc-700 rounded p-2 outline-none"/>
-                                        </div>
-                                        <div className="flex-1">
-                                            <label className="block text-xs font-bold text-zinc-400 mb-1.5 uppercase">映像ビットレート</label>
-                                            <input type="number" value={settings.vBitrate} onChange={e => setSettings({...settings, vBitrate: Number(e.target.value)})} className="w-full bg-zinc-950 border border-zinc-700 rounded p-2 outline-none"/>
-                                        </div>
+                                        <div className="flex-1"><label className="block text-xs font-bold text-zinc-400 mb-1.5 uppercase">フレームレート</label><input type="number" value={settings.fps} onChange={e => setSettings({...settings, fps: Number(e.target.value)})} className="w-full bg-zinc-950 border border-zinc-700 rounded p-2 outline-none"/></div>
+                                        <div className="flex-1"><label className="block text-xs font-bold text-zinc-400 mb-1.5 uppercase">映像ビットレート</label><input type="number" value={settings.vBitrate} onChange={e => setSettings({...settings, vBitrate: Number(e.target.value)})} className="w-full bg-zinc-950 border border-zinc-700 rounded p-2 outline-none"/></div>
                                     </div>
                                 </div>
                                 
