@@ -62,6 +62,9 @@
             const [duration, setDuration] = useState(30); 
             const [timelineZoom, setTimelineZoom] = useState(1); 
 
+            // スクラブ（ドラッグで再生位置移動）状態
+            const [isScrubbing, setIsScrubbing] = useState(false);
+
             const [aiText, setAiText] = useState("");
             const canvasRef = useRef(null);
             const animationRef = useRef(null);
@@ -83,17 +86,15 @@
                 ctx.fillStyle = '#000000';
                 ctx.fillRect(0, 0, settings.width, settings.height);
 
-                // 全てのメディア要素の再生/停止と音量の同期
+                // メディアの同期
                 items.forEach(it => {
                     if ((it.type === 'video' || it.type === 'audio') && it.element) {
                         it.element.volume = it.volume !== undefined ? it.volume : 1;
                         const isActive = currentTime >= it.start && currentTime <= it.start + it.duration;
                         
-                        // 再生範囲外、または一時停止中なら音を止める
                         if (!isActive || !isPlaying) {
                             if (!it.element.paused) it.element.pause();
                         } else if (isPlaying) {
-                            // 再生範囲内なら時間を同期させて再生
                             const mediaTime = (currentTime - it.start) + (it.offset || 0);
                             if (Math.abs(it.element.currentTime - mediaTime) > 0.1) {
                                 it.element.currentTime = Math.max(0, mediaTime);
@@ -107,9 +108,8 @@
 
                 const activeItems = items.filter(it => currentTime >= it.start && currentTime <= it.start + it.duration);
                 
-                // キャンバスへの描画（Zインデックス順）
+                // 描画
                 activeItems.sort((a, b) => a.layer - b.layer).forEach(item => {
-                    // オーディオは描画しないのでスキップ
                     if (item.type === 'audio') return;
 
                     ctx.save();
@@ -120,7 +120,6 @@
                     let currentAlpha = item.opacity !== undefined ? item.opacity : 1;
                     let currentRot = item.rotation || 0;
 
-                    // アニメーション処理
                     const timeIn = currentTime - item.start;
                     if (item.animation !== "none" && timeIn < 1) { 
                         const progress = Math.max(0, timeIn);
@@ -258,7 +257,6 @@
             };
             const handleCanvasMouseUp = () => setIsDragging(false);
 
-            // 追加系関数
             const createBaseItem = (type, name) => ({
                 id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
                 type, name, start: currentTime, duration: 5, layer: 1,
@@ -266,7 +264,6 @@
                 opacity: 1, rotation: 0, animation: "none", volume: 1
             });
 
-            // メディアファイルの読み込み (動画・画像・音声)
             const handleFileUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -280,7 +277,6 @@
                 if (isVideo) {
                     const video = document.createElement('video');
                     video.src = url;
-                    video.muted = true; // キャンバス描画用ミュート。音声はWeb Audioや別処理が必要だが今回は簡易ミュート解除で再生
                     video.muted = false; 
                     video.onloadedmetadata = () => {
                         newItem.duration = video.duration;
@@ -294,7 +290,7 @@
                     audio.onloadedmetadata = () => {
                         newItem.duration = audio.duration;
                         newItem.element = audio;
-                        newItem.layer = 0; // オーディオは下層トラックへ
+                        newItem.layer = 0;
                         setItems(prev => [...prev, newItem]);
                     };
                 } else {
@@ -326,7 +322,6 @@
                 if (!aiText.trim()) return;
                 
                 try {
-                    // VOICEVOX (Localhost)
                     const queryRes = await fetch(`http://127.0.0.1:50021/audio_query?text=${encodeURIComponent(aiText)}&speaker=1`, { method: 'POST' });
                     const queryJson = await queryRes.json();
                     const synthRes = await fetch(`http://127.0.0.1:50021/synthesis?speaker=1`, {
@@ -350,7 +345,6 @@
                     setItems(prev => [...prev, aItem]);
                 }
 
-                // 字幕追加
                 const tItem = createBaseItem('text', '自動字幕');
                 tItem.text = aiText;
                 tItem.layer = 3;
@@ -366,21 +360,39 @@
                 setAiText("");
             };
 
-            // タイムラインクリックで移動（シーク）
-            const handleTimelineClick = (e) => {
+            // ----------------------------------------------------
+            // タイムライン スクラブ操作
+            // ----------------------------------------------------
+            const updateTimeFromMouse = (e) => {
                 const bg = document.getElementById('timeline-bg');
                 if (!bg) return;
                 const rect = bg.getBoundingClientRect();
-                const clickX = e.clientX - rect.left - 80; // 80は左側のヘッダー幅
+                // 80pxは左側のヘッダー(Track名)の幅
+                const clickX = e.clientX - rect.left - 80;
                 
                 if (clickX >= 0) {
                     const totalWidth = duration * 100 * timelineZoom;
                     const newTime = (clickX / totalWidth) * duration;
                     setCurrentTime(Math.max(0, Math.min(newTime, duration)));
+                } else {
+                    setCurrentTime(0); // 80pxより左側にマウスが言った場合は0秒にする
                 }
             };
 
-            // エクスポート
+            const handleTimelineMouseDown = (e) => {
+                setIsScrubbing(true);
+                updateTimeFromMouse(e);
+            };
+
+            const handleTimelineMouseMove = (e) => {
+                if (!isScrubbing) return;
+                updateTimeFromMouse(e);
+            };
+
+            const handleTimelineMouseUp = () => {
+                setIsScrubbing(false);
+            };
+
             const exportVideo = () => {
                 if (!canvasRef.current) return;
                 setIsRecording(true);
@@ -415,7 +427,6 @@
 
             const selectedItem = items.find(it => it.id === selectedId);
 
-            // 更新ハンドラ
             const updateItem = (id, key, value) => {
                 setItems(prev => prev.map(it => it.id === id ? { ...it, [key]: value } : it));
             };
@@ -447,7 +458,6 @@
                                 <i className="fa-solid fa-toolbox mr-2"></i>ツール
                             </div>
                             <div className="p-4 space-y-6 overflow-y-auto">
-                                {/* メディア追加 */}
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-zinc-400 uppercase">メディア</label>
                                     <label className="cursor-pointer block bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded p-3 text-center transition">
@@ -461,7 +471,6 @@
                                     </label>
                                 </div>
 
-                                {/* テキスト追加 */}
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-zinc-400 uppercase">テキスト</label>
                                     <button onClick={addText} className="w-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded p-3 text-center transition">
@@ -470,7 +479,6 @@
                                     </button>
                                 </div>
 
-                                {/* AI音声 */}
                                 <div className="space-y-2 bg-zinc-850 p-3 rounded border border-zinc-700/50">
                                     <label className="text-xs font-bold text-zinc-400 uppercase flex items-center">
                                         <i className="fa-solid fa-robot mr-1.5 text-purple-400"></i> AI音声 & 字幕
@@ -546,7 +554,6 @@
                             <div className="p-4 flex-1 overflow-y-auto">
                                 {selectedItem ? (
                                     <div className="space-y-5">
-                                        {/* 基本設定: 時間 */}
                                         <div className="space-y-3 pb-4 border-b border-zinc-800">
                                             <h4 className="text-xs font-bold text-zinc-500">タイムライン設定</h4>
                                             <div className="flex space-x-2">
@@ -561,7 +568,6 @@
                                             </div>
                                         </div>
 
-                                        {/* オーディオ設定 (動画・音声のみ) */}
                                         {['video', 'audio'].includes(selectedItem.type) && (
                                             <div className="space-y-3 pb-4 border-b border-zinc-800">
                                                 <h4 className="text-xs font-bold text-zinc-500">オーディオ設定</h4>
@@ -572,7 +578,6 @@
                                             </div>
                                         )}
 
-                                        {/* トランスフォーム (音声以外) */}
                                         {['text', 'image', 'video'].includes(selectedItem.type) && (
                                             <div className="space-y-3 pb-4 border-b border-zinc-800">
                                                 <h4 className="text-xs font-bold text-zinc-500">トランスフォーム (位置・サイズ)</h4>
@@ -613,7 +618,6 @@
                                             </div>
                                         )}
 
-                                        {/* テキスト専用プロパティ */}
                                         {selectedItem.type === 'text' && (
                                             <div className="space-y-3 pb-4 border-b border-zinc-800">
                                                 <h4 className="text-xs font-bold text-zinc-500">テキスト装飾</h4>
@@ -643,7 +647,6 @@
                                             </div>
                                         )}
 
-                                        {/* エフェクト (音声以外) */}
                                         {['text', 'image', 'video'].includes(selectedItem.type) && (
                                             <div className="space-y-3">
                                                 <h4 className="text-xs font-bold text-zinc-500">エフェクト</h4>
@@ -661,7 +664,6 @@
                                         )}
 
                                         <button onClick={() => {
-                                            // 削除時に音声を止める
                                             if (selectedItem.element) selectedItem.element.pause();
                                             setItems(items.filter(it => it.id !== selectedId));
                                             setSelectedId(null);
@@ -679,9 +681,8 @@
                         </div>
                     </div>
 
-                    {/* タイムライン領域 */}
+                    {/* タイムライン領域（スクラブイベントを追加） */}
                     <div className="h-72 bg-zinc-900 border-t border-zinc-800 flex flex-col select-none shrink-0">
-                        {/* タイムラインツールバー */}
                         <div className="flex bg-zinc-850 border-b border-zinc-800 px-4 py-1.5 items-center justify-between shadow-sm z-10">
                             <div className="flex items-center space-x-6">
                                 <span className="font-bold text-zinc-300 text-xs"><i className="fa-solid fa-layer-group mr-1.5"></i>タイムライン</span>
@@ -697,10 +698,14 @@
                             </div>
                         </div>
                         
-                        {/* トラック領域 */}
-                        <div className="flex-1 overflow-auto relative bg-zinc-950 scroll-smooth" onMouseDown={handleTimelineClick}>
+                        <div 
+                            className="flex-1 overflow-auto relative bg-zinc-950"
+                            onMouseDown={handleTimelineMouseDown}
+                            onMouseMove={handleTimelineMouseMove}
+                            onMouseUp={handleTimelineMouseUp}
+                            onMouseLeave={handleTimelineMouseUp}
+                        >
                             <div id="timeline-bg" className="relative" style={{ width: `${80 + duration * 100 * timelineZoom}px`, minHeight: '100%' }}>
-                                {/* ルーラー (目盛り) */}
                                 <div className="h-7 border-b border-zinc-800 bg-zinc-900 sticky top-0 z-20" style={{ paddingLeft: '80px' }}>
                                     {[...Array(Math.ceil(duration) + 1)].map((_, i) => (
                                         <div key={i} className="absolute text-[10px] font-mono text-zinc-500 border-l border-zinc-700 pl-1 h-full pt-1" 
@@ -710,7 +715,6 @@
                                     ))}
                                 </div>
 
-                                {/* レイヤー (0〜3) */}
                                 {[0, 1, 2, 3].map(layerNum => (
                                     <div key={layerNum} className="h-12 bg-zinc-900/40 border-b border-zinc-800/50 relative flex items-center">
                                         <div className="absolute left-0 top-0 bottom-0 w-[80px] bg-zinc-900 border-r border-zinc-800 flex flex-col items-center justify-center text-[10px] text-zinc-500 z-10 sticky left-0 shadow-[2px_0_5px_rgba(0,0,0,0.2)]">
@@ -721,7 +725,6 @@
                                             <div key={item.id} 
                                                  onMouseDown={(e) => { 
                                                      setSelectedId(item.id); 
-                                                     // e.stopPropagation(); は削除し、親のhandleTimelineClickも発火させてクリック位置にシークさせる
                                                  }}
                                                  className={`absolute h-8 rounded cursor-pointer text-xs px-2 flex items-center overflow-hidden shadow transition-colors ${
                                                      item.id === selectedId 
@@ -750,7 +753,6 @@
                         </div>
                     </div>
 
-                    {/* 設定モーダル */}
                     {isSettingsOpen && (
                         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
                             <div className="bg-zinc-900 p-6 rounded-lg shadow-2xl w-[400px] border border-zinc-700 transform scale-100">
