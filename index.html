@@ -60,7 +60,7 @@
             const [isPlaying, setIsPlaying] = useState(false);
             const [playbackRate, setPlaybackRate] = useState(1.0);
             const [duration, setDuration] = useState(30); 
-            const [timelineZoom, setTimelineZoom] = useState(1); // タイムラインの拡大率
+            const [timelineZoom, setTimelineZoom] = useState(1); 
 
             const [aiText, setAiText] = useState("");
             const canvasRef = useRef(null);
@@ -72,19 +72,46 @@
             const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
             // ----------------------------------------------------
-            // キャンバス描画ループ
+            // キャンバス描画・メディア同期ループ
             // ----------------------------------------------------
             const renderCanvas = useCallback((timeNow) => {
                 const canvas = canvasRef.current;
                 if (!canvas) return;
                 const ctx = canvas.getContext('2d');
                 
+                // 背景クリア
                 ctx.fillStyle = '#000000';
                 ctx.fillRect(0, 0, settings.width, settings.height);
 
+                // 全てのメディア要素の再生/停止と音量の同期
+                items.forEach(it => {
+                    if ((it.type === 'video' || it.type === 'audio') && it.element) {
+                        it.element.volume = it.volume !== undefined ? it.volume : 1;
+                        const isActive = currentTime >= it.start && currentTime <= it.start + it.duration;
+                        
+                        // 再生範囲外、または一時停止中なら音を止める
+                        if (!isActive || !isPlaying) {
+                            if (!it.element.paused) it.element.pause();
+                        } else if (isPlaying) {
+                            // 再生範囲内なら時間を同期させて再生
+                            const mediaTime = (currentTime - it.start) + (it.offset || 0);
+                            if (Math.abs(it.element.currentTime - mediaTime) > 0.1) {
+                                it.element.currentTime = Math.max(0, mediaTime);
+                            }
+                            if (it.element.paused) {
+                                it.element.play().catch(e => console.log("Play failed", e));
+                            }
+                        }
+                    }
+                });
+
                 const activeItems = items.filter(it => currentTime >= it.start && currentTime <= it.start + it.duration);
                 
+                // キャンバスへの描画（Zインデックス順）
                 activeItems.sort((a, b) => a.layer - b.layer).forEach(item => {
+                    // オーディオは描画しないのでスキップ
+                    if (item.type === 'audio') return;
+
                     ctx.save();
                     
                     let currentX = item.x;
@@ -95,7 +122,7 @@
 
                     // アニメーション処理
                     const timeIn = currentTime - item.start;
-                    if (item.animation !== "none" && timeIn < 1) { // 最初の1秒間
+                    if (item.animation !== "none" && timeIn < 1) { 
                         const progress = Math.max(0, timeIn);
                         if (item.animation === "fade") currentAlpha *= progress;
                         if (item.animation === "slideUp") currentY += (1 - progress) * 100;
@@ -108,7 +135,6 @@
 
                     ctx.globalAlpha = currentAlpha;
 
-                    // 回転・スケールの起点をアイテムの中心にするための変換
                     const hw = (item.width || (item.type === 'text' ? item.fontSize * 5 : 100)) / 2;
                     const hh = (item.height || (item.type === 'text' ? item.fontSize : 100)) / 2;
                     ctx.translate(currentX + hw, currentY + hh);
@@ -120,18 +146,15 @@
                         ctx.font = `bold ${item.fontSize}px ${item.fontFamily || 'sans-serif'}`;
                         ctx.textBaseline = 'top';
                         
-                        // 縁取り
                         if (item.strokeWidth > 0) {
                             ctx.strokeStyle = item.strokeColor || '#000000';
                             ctx.lineWidth = item.strokeWidth;
                             ctx.lineJoin = 'round';
                             ctx.strokeText(item.text, currentX, currentY);
                         }
-                        // 文字塗りつぶし
                         ctx.fillStyle = item.color;
                         ctx.fillText(item.text, currentX, currentY);
 
-                        // 選択枠
                         if (item.id === selectedId && !isPlaying && !isRecording) {
                             const metrics = ctx.measureText(item.text);
                             ctx.strokeStyle = '#3b82f6';
@@ -142,15 +165,6 @@
                         }
                     } else if (item.type === 'image' || item.type === 'video') {
                         if (item.element) {
-                            if (item.type === 'video') {
-                                const videoTime = (currentTime - item.start) + (item.offset || 0);
-                                if (Math.abs(item.element.currentTime - videoTime) > 0.1) {
-                                    item.element.currentTime = videoTime;
-                                }
-                                if (isPlaying && item.element.paused) item.element.play();
-                                else if (!isPlaying && !item.element.paused) item.element.pause();
-                            }
-                            
                             ctx.drawImage(item.element, currentX, currentY, item.width, item.height);
                             
                             if (item.id === selectedId && !isPlaying && !isRecording) {
@@ -202,6 +216,8 @@
                 
                 for (let i = activeItems.length - 1; i >= 0; i--) {
                     const item = activeItems[i];
+                    if (item.type === 'audio') continue;
+
                     let isHit = false;
                     if (item.type === 'text') {
                         const ctx = canvas.getContext('2d');
@@ -247,25 +263,38 @@
                 id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
                 type, name, start: currentTime, duration: 5, layer: 1,
                 x: settings.width / 4, y: settings.height / 4, width: 300, height: 300,
-                opacity: 1, rotation: 0, animation: "none"
+                opacity: 1, rotation: 0, animation: "none", volume: 1
             });
 
+            // メディアファイルの読み込み (動画・画像・音声)
             const handleFileUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 const url = URL.createObjectURL(file);
                 const isVideo = file.type.startsWith('video');
-                const newItem = createBaseItem(isVideo ? 'video' : 'image', file.name);
+                const isAudio = file.type.startsWith('audio');
+                
+                const type = isVideo ? 'video' : isAudio ? 'audio' : 'image';
+                const newItem = createBaseItem(type, file.name);
 
                 if (isVideo) {
                     const video = document.createElement('video');
                     video.src = url;
-                    video.muted = true;
+                    video.muted = true; // キャンバス描画用ミュート。音声はWeb Audioや別処理が必要だが今回は簡易ミュート解除で再生
+                    video.muted = false; 
                     video.onloadedmetadata = () => {
                         newItem.duration = video.duration;
                         newItem.width = video.videoWidth > settings.width ? settings.width : video.videoWidth;
                         newItem.height = video.videoHeight > settings.height ? settings.height : video.videoHeight;
                         newItem.element = video;
+                        setItems(prev => [...prev, newItem]);
+                    };
+                } else if (isAudio) {
+                    const audio = new Audio(url);
+                    audio.onloadedmetadata = () => {
+                        newItem.duration = audio.duration;
+                        newItem.element = audio;
+                        newItem.layer = 0; // オーディオは下層トラックへ
                         setItems(prev => [...prev, newItem]);
                     };
                 } else {
@@ -337,13 +366,27 @@
                 setAiText("");
             };
 
+            // タイムラインクリックで移動（シーク）
+            const handleTimelineClick = (e) => {
+                const bg = document.getElementById('timeline-bg');
+                if (!bg) return;
+                const rect = bg.getBoundingClientRect();
+                const clickX = e.clientX - rect.left - 80; // 80は左側のヘッダー幅
+                
+                if (clickX >= 0) {
+                    const totalWidth = duration * 100 * timelineZoom;
+                    const newTime = (clickX / totalWidth) * duration;
+                    setCurrentTime(Math.max(0, Math.min(newTime, duration)));
+                }
+            };
+
             // エクスポート
             const exportVideo = () => {
                 if (!canvasRef.current) return;
                 setIsRecording(true);
                 setCurrentTime(0);
                 setIsPlaying(true);
-                setSelectedId(null); // 枠線を消す
+                setSelectedId(null); 
 
                 const stream = canvasRef.current.captureStream(settings.fps);
                 const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9', videoBitsPerSecond: settings.vBitrate });
@@ -379,7 +422,7 @@
 
             return (
                 <div className="flex flex-col h-full bg-zinc-950 font-sans text-zinc-300">
-                    {/* 1. ヘッダー */}
+                    {/* ヘッダー */}
                     <header className="h-14 bg-zinc-900 border-b border-zinc-800 flex justify-between items-center px-6 shrink-0 shadow-sm z-20">
                         <div className="flex items-center space-x-3 text-zinc-100">
                             <i className="fa-solid fa-clapperboard text-blue-500 text-xl"></i>
@@ -395,7 +438,7 @@
                         </div>
                     </header>
 
-                    {/* 2. メイン領域 (左サイドバー + 中央プレビュー + 右サイドバー) */}
+                    {/* メイン領域 */}
                     <div className="flex flex-1 overflow-hidden">
                         
                         {/* 左：ツールバー */}
@@ -404,14 +447,17 @@
                                 <i className="fa-solid fa-toolbox mr-2"></i>ツール
                             </div>
                             <div className="p-4 space-y-6 overflow-y-auto">
-                                
                                 {/* メディア追加 */}
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-zinc-400 uppercase">メディア</label>
                                     <label className="cursor-pointer block bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded p-3 text-center transition">
-                                        <i className="fa-solid fa-file-video text-2xl text-blue-400 mb-2 block"></i>
-                                        <span>PCから動画/画像を読み込む</span>
-                                        <input type="file" className="hidden" accept="image/*,video/*" onChange={handleFileUpload} />
+                                        <div className="flex justify-center space-x-2 mb-2 text-xl text-blue-400">
+                                            <i className="fa-solid fa-image"></i>
+                                            <i className="fa-solid fa-video"></i>
+                                            <i className="fa-solid fa-music"></i>
+                                        </div>
+                                        <span>PCから動画/画像/音声を<br/>読み込む</span>
+                                        <input type="file" className="hidden" accept="image/*,video/*,audio/*" onChange={handleFileUpload} />
                                     </label>
                                 </div>
 
@@ -438,21 +484,18 @@
                                     <button onClick={generateAIVoice} className="w-full mt-2 bg-purple-600 hover:bg-purple-500 text-white py-1.5 rounded transition shadow">
                                         生成してタイムラインに追加
                                     </button>
-                                    <p className="text-[10px] text-zinc-500 mt-1">※VOICEVOX(ローカル)連携対応</p>
                                 </div>
                             </div>
                         </div>
 
                         {/* 中央：キャンバス＆プレイヤー */}
                         <div className="flex-1 flex flex-col relative bg-zinc-950">
-                            {/* ツールバー(キャンバス上) */}
                             <div className="absolute top-4 right-4 z-10">
                                 <button onClick={() => setShowGrid(!showGrid)} className={`px-3 py-1.5 rounded bg-zinc-800/80 backdrop-blur border border-zinc-700 shadow-lg text-xs transition ${showGrid ? 'text-blue-400 border-blue-500/50' : 'text-zinc-400'}`}>
                                     <i className="fa-solid fa-border-all mr-1"></i>グリッド表示
                                 </button>
                             </div>
 
-                            {/* キャンバスエリア */}
                             <div className="flex-1 p-6 flex items-center justify-center min-h-0">
                                 <div className={`canvas-container relative rounded shadow-2xl ring-1 ring-zinc-800 ${showGrid ? 'grid-overlay' : ''}`} 
                                      style={{ aspectRatio: `${settings.width} / ${settings.height}`, maxHeight: '100%', maxWidth: '100%' }}>
@@ -469,7 +512,7 @@
                                 </div>
                             </div>
 
-                            {/* プレイヤーコントロール */}
+                            {/* コントロール */}
                             <div className="h-16 shrink-0 bg-zinc-900 border-t border-zinc-800 flex items-center justify-center px-4 space-x-6">
                                 <div className="text-lg font-mono text-blue-400 w-20 text-right">{currentTime.toFixed(2)}s</div>
                                 
@@ -497,7 +540,7 @@
                         <div className="w-80 bg-zinc-900 border-l border-zinc-800 flex flex-col shrink-0">
                             <div className="px-4 py-3 bg-zinc-850 border-b border-zinc-800 font-bold text-zinc-200 flex justify-between items-center">
                                 <span><i className="fa-solid fa-sliders mr-2"></i>プロパティ</span>
-                                {selectedItem && <span className="text-xs bg-zinc-700 px-2 py-0.5 rounded text-zinc-300">{selectedItem.type}</span>}
+                                {selectedItem && <span className="text-xs bg-zinc-700 px-2 py-0.5 rounded text-zinc-300">{selectedItem.type.toUpperCase()}</span>}
                             </div>
                             
                             <div className="p-4 flex-1 overflow-y-auto">
@@ -518,44 +561,57 @@
                                             </div>
                                         </div>
 
-                                        {/* トランスフォーム */}
-                                        <div className="space-y-3 pb-4 border-b border-zinc-800">
-                                            <h4 className="text-xs font-bold text-zinc-500">トランスフォーム (位置・サイズ)</h4>
-                                            <div className="flex space-x-2">
-                                                <div className="flex-1">
-                                                    <label className="block text-xs text-zinc-400 mb-1">X 位置</label>
-                                                    <input type="number" value={Math.round(selectedItem.x)} onChange={(e) => updateItem(selectedId, 'x', Number(e.target.value))} className="w-full bg-zinc-950 border border-zinc-700 rounded p-1.5 outline-none"/>
-                                                </div>
-                                                <div className="flex-1">
-                                                    <label className="block text-xs text-zinc-400 mb-1">Y 位置</label>
-                                                    <input type="number" value={Math.round(selectedItem.y)} onChange={(e) => updateItem(selectedId, 'y', Number(e.target.value))} className="w-full bg-zinc-950 border border-zinc-700 rounded p-1.5 outline-none"/>
+                                        {/* オーディオ設定 (動画・音声のみ) */}
+                                        {['video', 'audio'].includes(selectedItem.type) && (
+                                            <div className="space-y-3 pb-4 border-b border-zinc-800">
+                                                <h4 className="text-xs font-bold text-zinc-500">オーディオ設定</h4>
+                                                <div>
+                                                    <label className="block text-xs text-zinc-400 mb-1">音量: {Math.round((selectedItem.volume ?? 1) * 100)}%</label>
+                                                    <input type="range" min="0" max="100" value={Math.round((selectedItem.volume ?? 1) * 100)} onChange={(e) => updateItem(selectedId, 'volume', Number(e.target.value)/100)} className="w-full accent-blue-500"/>
                                                 </div>
                                             </div>
-                                            
-                                            {['image', 'video'].includes(selectedItem.type) && (
+                                        )}
+
+                                        {/* トランスフォーム (音声以外) */}
+                                        {['text', 'image', 'video'].includes(selectedItem.type) && (
+                                            <div className="space-y-3 pb-4 border-b border-zinc-800">
+                                                <h4 className="text-xs font-bold text-zinc-500">トランスフォーム (位置・サイズ)</h4>
                                                 <div className="flex space-x-2">
                                                     <div className="flex-1">
-                                                        <label className="block text-xs text-zinc-400 mb-1">幅 (px)</label>
-                                                        <input type="number" value={Math.round(selectedItem.width)} onChange={(e) => updateItem(selectedId, 'width', Number(e.target.value))} className="w-full bg-zinc-950 border border-zinc-700 rounded p-1.5 outline-none"/>
+                                                        <label className="block text-xs text-zinc-400 mb-1">X 位置</label>
+                                                        <input type="number" value={Math.round(selectedItem.x)} onChange={(e) => updateItem(selectedId, 'x', Number(e.target.value))} className="w-full bg-zinc-950 border border-zinc-700 rounded p-1.5 outline-none"/>
                                                     </div>
                                                     <div className="flex-1">
-                                                        <label className="block text-xs text-zinc-400 mb-1">高さ (px)</label>
-                                                        <input type="number" value={Math.round(selectedItem.height)} onChange={(e) => updateItem(selectedId, 'height', Number(e.target.value))} className="w-full bg-zinc-950 border border-zinc-700 rounded p-1.5 outline-none"/>
+                                                        <label className="block text-xs text-zinc-400 mb-1">Y 位置</label>
+                                                        <input type="number" value={Math.round(selectedItem.y)} onChange={(e) => updateItem(selectedId, 'y', Number(e.target.value))} className="w-full bg-zinc-950 border border-zinc-700 rounded p-1.5 outline-none"/>
                                                     </div>
                                                 </div>
-                                            )}
+                                                
+                                                {['image', 'video'].includes(selectedItem.type) && (
+                                                    <div className="flex space-x-2">
+                                                        <div className="flex-1">
+                                                            <label className="block text-xs text-zinc-400 mb-1">幅 (px)</label>
+                                                            <input type="number" value={Math.round(selectedItem.width)} onChange={(e) => updateItem(selectedId, 'width', Number(e.target.value))} className="w-full bg-zinc-950 border border-zinc-700 rounded p-1.5 outline-none"/>
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <label className="block text-xs text-zinc-400 mb-1">高さ (px)</label>
+                                                            <input type="number" value={Math.round(selectedItem.height)} onChange={(e) => updateItem(selectedId, 'height', Number(e.target.value))} className="w-full bg-zinc-950 border border-zinc-700 rounded p-1.5 outline-none"/>
+                                                        </div>
+                                                    </div>
+                                                )}
 
-                                            <div className="flex space-x-2">
-                                                <div className="flex-1">
-                                                    <label className="block text-xs text-zinc-400 mb-1">回転 (度)</label>
-                                                    <input type="number" value={selectedItem.rotation || 0} onChange={(e) => updateItem(selectedId, 'rotation', Number(e.target.value))} className="w-full bg-zinc-950 border border-zinc-700 rounded p-1.5 outline-none"/>
-                                                </div>
-                                                <div className="flex-1">
-                                                    <label className="block text-xs text-zinc-400 mb-1">不透明度 (%)</label>
-                                                    <input type="number" min="0" max="100" value={Math.round((selectedItem.opacity ?? 1) * 100)} onChange={(e) => updateItem(selectedId, 'opacity', Number(e.target.value)/100)} className="w-full bg-zinc-950 border border-zinc-700 rounded p-1.5 outline-none"/>
+                                                <div className="flex space-x-2">
+                                                    <div className="flex-1">
+                                                        <label className="block text-xs text-zinc-400 mb-1">回転 (度)</label>
+                                                        <input type="number" value={selectedItem.rotation || 0} onChange={(e) => updateItem(selectedId, 'rotation', Number(e.target.value))} className="w-full bg-zinc-950 border border-zinc-700 rounded p-1.5 outline-none"/>
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <label className="block text-xs text-zinc-400 mb-1">不透明度 (%)</label>
+                                                        <input type="number" min="0" max="100" value={Math.round((selectedItem.opacity ?? 1) * 100)} onChange={(e) => updateItem(selectedId, 'opacity', Number(e.target.value)/100)} className="w-full bg-zinc-950 border border-zinc-700 rounded p-1.5 outline-none"/>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
+                                        )}
 
                                         {/* テキスト専用プロパティ */}
                                         {selectedItem.type === 'text' && (
@@ -587,22 +643,26 @@
                                             </div>
                                         )}
 
-                                        {/* エフェクト */}
-                                        <div className="space-y-3">
-                                            <h4 className="text-xs font-bold text-zinc-500">エフェクト</h4>
-                                            <div>
-                                                <label className="block text-xs text-zinc-400 mb-1">登場アニメーション</label>
-                                                <select value={selectedItem.animation || "none"} onChange={(e) => updateItem(selectedId, 'animation', e.target.value)} className="w-full bg-zinc-950 border border-zinc-700 rounded p-1.5 outline-none focus:border-blue-500">
-                                                    <option value="none">なし</option>
-                                                    <option value="fade">フェードイン</option>
-                                                    <option value="slideUp">スライドアップ</option>
-                                                    <option value="zoom">ズームイン</option>
-                                                    <option value="spin">スピン登場</option>
-                                                </select>
+                                        {/* エフェクト (音声以外) */}
+                                        {['text', 'image', 'video'].includes(selectedItem.type) && (
+                                            <div className="space-y-3">
+                                                <h4 className="text-xs font-bold text-zinc-500">エフェクト</h4>
+                                                <div>
+                                                    <label className="block text-xs text-zinc-400 mb-1">登場アニメーション</label>
+                                                    <select value={selectedItem.animation || "none"} onChange={(e) => updateItem(selectedId, 'animation', e.target.value)} className="w-full bg-zinc-950 border border-zinc-700 rounded p-1.5 outline-none focus:border-blue-500">
+                                                        <option value="none">なし</option>
+                                                        <option value="fade">フェードイン</option>
+                                                        <option value="slideUp">スライドアップ</option>
+                                                        <option value="zoom">ズームイン</option>
+                                                        <option value="spin">スピン登場</option>
+                                                    </select>
+                                                </div>
                                             </div>
-                                        </div>
+                                        )}
 
                                         <button onClick={() => {
+                                            // 削除時に音声を止める
+                                            if (selectedItem.element) selectedItem.element.pause();
                                             setItems(items.filter(it => it.id !== selectedId));
                                             setSelectedId(null);
                                         }} className="w-full mt-4 bg-red-900/50 hover:bg-red-600 border border-red-800 text-red-100 py-2 rounded transition flex items-center justify-center">
@@ -619,7 +679,7 @@
                         </div>
                     </div>
 
-                    {/* 3. タイムライン領域 */}
+                    {/* タイムライン領域 */}
                     <div className="h-72 bg-zinc-900 border-t border-zinc-800 flex flex-col select-none shrink-0">
                         {/* タイムラインツールバー */}
                         <div className="flex bg-zinc-850 border-b border-zinc-800 px-4 py-1.5 items-center justify-between shadow-sm z-10">
@@ -638,19 +698,7 @@
                         </div>
                         
                         {/* トラック領域 */}
-                        <div className="flex-1 overflow-auto relative bg-zinc-950 scroll-smooth" 
-                             onMouseDown={(e) => {
-                                 if (e.target === e.currentTarget || e.target.id === 'timeline-bg') {
-                                    const rect = e.currentTarget.getBoundingClientRect();
-                                    const clickX = e.clientX - rect.left + e.currentTarget.scrollLeft - 80; // 80 is layer header width
-                                    if(clickX > 0) {
-                                        const totalWidth = duration * 100 * timelineZoom;
-                                        const newTime = (clickX / totalWidth) * duration;
-                                        setCurrentTime(Math.max(0, Math.min(newTime, duration)));
-                                    }
-                                 }
-                             }}>
-                            
+                        <div className="flex-1 overflow-auto relative bg-zinc-950 scroll-smooth" onMouseDown={handleTimelineClick}>
                             <div id="timeline-bg" className="relative" style={{ width: `${80 + duration * 100 * timelineZoom}px`, minHeight: '100%' }}>
                                 {/* ルーラー (目盛り) */}
                                 <div className="h-7 border-b border-zinc-800 bg-zinc-900 sticky top-0 z-20" style={{ paddingLeft: '80px' }}>
@@ -665,15 +713,16 @@
                                 {/* レイヤー (0〜3) */}
                                 {[0, 1, 2, 3].map(layerNum => (
                                     <div key={layerNum} className="h-12 bg-zinc-900/40 border-b border-zinc-800/50 relative flex items-center">
-                                        {/* レイヤーヘッダー */}
                                         <div className="absolute left-0 top-0 bottom-0 w-[80px] bg-zinc-900 border-r border-zinc-800 flex flex-col items-center justify-center text-[10px] text-zinc-500 z-10 sticky left-0 shadow-[2px_0_5px_rgba(0,0,0,0.2)]">
                                             <span>Track {layerNum + 1}</span>
                                         </div>
                                         
-                                        {/* アイテムブロック */}
                                         {items.filter(it => it.layer === layerNum).map(item => (
                                             <div key={item.id} 
-                                                 onMouseDown={(e) => { e.stopPropagation(); setSelectedId(item.id); }}
+                                                 onMouseDown={(e) => { 
+                                                     setSelectedId(item.id); 
+                                                     // e.stopPropagation(); は削除し、親のhandleTimelineClickも発火させてクリック位置にシークさせる
+                                                 }}
                                                  className={`absolute h-8 rounded cursor-pointer text-xs px-2 flex items-center overflow-hidden shadow transition-colors ${
                                                      item.id === selectedId 
                                                      ? 'bg-blue-600 border border-blue-400 ring-2 ring-blue-500/50 z-10' 
