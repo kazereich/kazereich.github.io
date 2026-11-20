@@ -6,41 +6,56 @@
     <title>Web Video Editor Prototype</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* カスタムスクロールバー（ダークテーマ用） */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #1f2937; 
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #4b5563; 
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #6b7280; 
-        }
+        /* カスタムスクロールバー */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
         
-        /* タイムラインのレイヤートラック用のスタイル */
+        /* タイムラインの背景グリッド */
         .timeline-track {
             background-image: linear-gradient(to right, #374151 1px, transparent 1px);
             background-size: 50px 100%;
         }
+        
+        /* タイムラインブロック */
+        .timeline-block {
+            position: absolute;
+            height: 24px;
+            top: 8px;
+            border-radius: 4px;
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+            user-select: none;
+        }
+        .timeline-block:active { cursor: grabbing; }
+        .timeline-block.selected { box-shadow: 0 0 0 2px #60a5fa; z-index: 10; }
+        
+        .resize-handle {
+            width: 8px;
+            height: 100%;
+            background: rgba(255,255,255,0.2);
+            cursor: ew-resize;
+            flex-shrink: 0;
+        }
+        .resize-handle:hover { background: rgba(255,255,255,0.5); }
+        .block-content { flex-grow: 1; padding: 0 4px; font-size: 10px; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-100 h-screen flex flex-col font-sans overflow-hidden">
 
     <!-- ヘッダー -->
-    <header class="bg-gray-800 border-b border-gray-700 h-14 flex items-center justify-between px-4 shrink-0">
+    <header class="bg-gray-800 border-b border-gray-700 h-14 flex items-center justify-between px-4 shrink-0 z-20">
         <div class="flex items-center gap-2">
             <div class="w-3 h-3 rounded-full bg-red-500"></div>
             <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
             <div class="w-3 h-3 rounded-full bg-green-500"></div>
-            <h1 class="ml-4 font-bold text-lg tracking-wider text-gray-200">Web Video Editor <span class="text-xs text-gray-400 font-normal">Prototype</span></h1>
+            <h1 class="ml-4 font-bold text-lg tracking-wider text-gray-200">Web Video Editor <span class="text-xs text-blue-400 font-normal border border-blue-400/30 px-2 py-0.5 rounded ml-2">Advanced</span></h1>
         </div>
         <div class="flex items-center gap-3">
-            <span id="status-text" class="text-sm text-green-400 mr-4"></span>
+            <span id="status-text" class="text-sm text-green-400 mr-4 font-medium transition-opacity duration-300"></span>
             <button id="btn-export" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 shadow-lg">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
                 動画を保存 (WebM)
@@ -52,22 +67,15 @@
     <main class="flex-1 flex overflow-hidden">
         
         <!-- 左側：プレビュー & コントロール -->
-        <section class="flex-1 flex flex-col border-r border-gray-700 bg-gray-950">
-            <!-- キャンバスエリア -->
-            <div class="flex-1 p-4 flex items-center justify-center overflow-hidden relative">
-                <!-- 動画描画用キャンバス（内部解像度は1920x1080などに固定し、CSSで表示サイズを調整） -->
-                <canvas id="preview-canvas" width="1280" height="720" class="w-full max-w-full max-h-full object-contain bg-black shadow-2xl rounded-md border border-gray-800"></canvas>
+        <section class="flex-1 flex flex-col border-r border-gray-700 bg-gray-950 relative">
+            <!-- キャンバスエリア (操作用ラッパー) -->
+            <div class="flex-1 p-4 flex items-center justify-center overflow-hidden relative" id="canvas-container">
+                <!-- 内部解像度 1280x720 固定 -->
+                <canvas id="preview-canvas" width="1280" height="720" class="max-w-full max-h-full object-contain bg-black shadow-2xl rounded-md border border-gray-800 cursor-default" style="aspect-ratio: 16/9;"></canvas>
             </div>
             
             <!-- コントロールバー -->
-            <div class="bg-gray-800 border-t border-gray-700 p-3 shrink-0 flex flex-col gap-2">
-                <!-- シークバー (プロトタイプでは動画全体の進行度) -->
-                <div class="flex items-center gap-2">
-                    <span id="time-current" class="text-xs font-mono text-gray-400 w-12 text-right">00:00</span>
-                    <input type="range" id="seek-bar" min="0" max="100" value="0" class="flex-1 h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer">
-                    <span id="time-total" class="text-xs font-mono text-gray-400 w-12">00:00</span>
-                </div>
-                
+            <div class="bg-gray-800 border-t border-gray-700 p-3 shrink-0 flex flex-col gap-2 z-10">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <button id="btn-play" class="p-2 bg-gray-700 hover:bg-gray-600 rounded-full transition-colors" title="再生">
@@ -82,7 +90,7 @@
                     </div>
                     
                     <div class="flex items-center gap-3">
-                        <label class="text-xs text-gray-400">再生スピード:</label>
+                        <label class="text-xs text-gray-400">速度:</label>
                         <input type="range" id="speed-slider" min="0.25" max="3" step="0.25" value="1" class="w-24 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer">
                         <span id="speed-value" class="text-xs font-mono text-gray-300 w-8">1.0x</span>
                     </div>
@@ -91,105 +99,97 @@
         </section>
 
         <!-- 右側：プロパティ（インスペクタ） -->
-        <aside class="w-80 bg-gray-800 flex flex-col shrink-0">
-            <div class="p-3 border-b border-gray-700 bg-gray-850">
-                <h2 class="text-sm font-bold text-gray-300">プロパティ (選択中のレイヤー)</h2>
+        <aside class="w-80 bg-gray-800 flex flex-col shrink-0 z-10 border-l border-gray-700 overflow-hidden">
+            <div class="p-3 border-b border-gray-700 bg-gray-850 shadow-sm z-10">
+                <h2 class="text-sm font-bold text-gray-300 flex items-center gap-2">
+                    <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    プロパティ
+                </h2>
             </div>
             
-            <div id="properties-panel" class="p-4 flex-1 overflow-y-auto space-y-4">
+            <div id="properties-panel" class="p-4 flex-1 overflow-y-auto space-y-6">
                 <div id="no-selection-msg" class="text-sm text-gray-500 text-center mt-10">
-                    レイヤーが選択されていません
+                    キャンバスかタイムラインで<br>レイヤーを選択してください
                 </div>
                 
-                <!-- テキストレイヤー用設定（JSで表示切り替え） -->
-                <div id="text-properties" class="hidden space-y-4">
-                    <div>
-                        <label class="block text-xs text-gray-400 mb-1">テキスト内容</label>
-                        <textarea id="prop-text-content" rows="3" class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm text-white focus:outline-none focus:border-blue-500"></textarea>
-                    </div>
+                <!-- 共通プロパティ (位置/アニメーション) -->
+                <div id="common-properties" class="hidden space-y-5">
                     
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1">フォント</label>
-                            <select id="prop-font-family" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white focus:outline-none">
-                                <option value="sans-serif">ゴシック体</option>
-                                <option value="serif">明朝体</option>
-                                <option value="monospace">等幅</option>
-                                <option value="Impact">Impact</option>
-                                <option value="Comic Sans MS">Comic Sans</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1">サイズ</label>
-                            <input type="number" id="prop-font-size" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white focus:outline-none" value="48">
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-xs text-gray-400 mb-1">文字色</label>
-                        <div class="flex items-center gap-2">
-                            <input type="color" id="prop-color" class="w-8 h-8 rounded cursor-pointer bg-transparent border-0 p-0">
-                            <input type="text" id="prop-color-text" class="flex-1 bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white" value="#ffffff">
+                    <!-- 専用プロパティのコンテナ -->
+                    <div id="specific-properties" class="space-y-4"></div>
+
+                    <div class="border-t border-gray-700 pt-4">
+                        <h3 class="text-xs font-semibold text-gray-400 mb-3 uppercase tracking-wider">トランスフォーム</h3>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[11px] text-gray-500 mb-1">位置 X</label>
+                                <input type="number" id="prop-pos-x" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white" value="0">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] text-gray-500 mb-1">位置 Y</label>
+                                <input type="number" id="prop-pos-y" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white" value="0">
+                            </div>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1">位置 X</label>
-                            <input type="number" id="prop-pos-x" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white" value="640">
-                        </div>
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1">位置 Y</label>
-                            <input type="number" id="prop-pos-y" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white" value="360">
+                    <div class="border-t border-gray-700 pt-4">
+                        <h3 class="text-xs font-semibold text-gray-400 mb-3 uppercase tracking-wider">アニメーション</h3>
+                        <div class="space-y-3">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-[11px] text-gray-500 mb-1">登場 (In)</label>
+                                    <select id="prop-anim-in" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white">
+                                        <option value="none">なし</option>
+                                        <option value="fade">フェード</option>
+                                        <option value="slide">スライド(左から)</option>
+                                        <option value="zoom">ズーム</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] text-gray-500 mb-1">退場 (Out)</label>
+                                    <select id="prop-anim-out" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white">
+                                        <option value="none">なし</option>
+                                        <option value="fade">フェード</option>
+                                        <option value="slide">スライド(右へ)</option>
+                                        <option value="zoom">ズーム縮小</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] text-gray-500 mb-1">アニメーション時間 (秒)</label>
+                                <input type="number" id="prop-anim-dur" step="0.1" min="0" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white" value="0.5">
+                            </div>
                         </div>
                     </div>
+
                 </div>
-
-                <!-- メディアレイヤー用設定 -->
-                <div id="media-properties" class="hidden space-y-4">
-                     <div>
-                        <label class="block text-xs text-gray-400 mb-1">ファイル名</label>
-                        <input type="text" id="prop-media-name" disabled class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-gray-500">
-                    </div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1">スケール (%)</label>
-                            <input type="number" id="prop-media-scale" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white" value="100">
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1">位置 X</label>
-                            <input type="number" id="prop-media-x" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white" value="0">
-                        </div>
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1">位置 Y</label>
-                            <input type="number" id="prop-media-y" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white" value="0">
-                        </div>
-                    </div>
-                </div>
-
             </div>
         </aside>
-
     </main>
 
     <!-- タイムライン / レイヤー -->
-    <footer class="h-64 bg-gray-900 border-t border-gray-700 flex flex-col shrink-0">
+    <footer class="h-72 bg-gray-900 border-t border-gray-700 flex flex-col shrink-0 z-20 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
         <!-- タイムラインツールバー -->
-        <div class="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700">
-            <button id="btn-add-text" class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors flex items-center gap-1">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"></path></svg>
-                テキスト追加
-            </button>
-            <div class="relative">
-                <input type="file" id="file-import" accept="video/*,image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
-                <button class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors flex items-center gap-1">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-                    メディア読み込み
+        <div class="bg-gray-800 p-2 flex items-center justify-between border-b border-gray-700">
+            <div class="flex items-center gap-2">
+                <button id="btn-add-text" class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors flex items-center gap-1 shadow-sm">
+                    <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"></path></svg>
+                    テキスト
                 </button>
+                <div class="relative">
+                    <input type="file" id="file-import" accept="video/*,image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                    <button class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors flex items-center gap-1 shadow-sm pointer-events-none">
+                        <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                        メディア読込
+                    </button>
+                </div>
             </div>
-            <button id="btn-delete-layer" class="px-3 py-1.5 bg-red-900/50 hover:bg-red-800/80 text-red-200 rounded text-sm transition-colors ml-auto">
+            
+            <div class="flex items-center gap-4 text-xs font-mono text-gray-400 bg-gray-900 px-3 py-1 rounded">
+                <span id="time-current">00:00.0</span> / <span id="time-total">00:30.0</span>
+            </div>
+
+            <button id="btn-delete-layer" class="px-3 py-1.5 bg-red-900/40 hover:bg-red-800/80 text-red-300 rounded text-sm transition-colors border border-red-800/50">
                 削除
             </button>
         </div>
@@ -200,17 +200,25 @@
             <div class="w-48 bg-gray-800 border-r border-gray-700 flex flex-col overflow-y-auto" id="layer-headers">
                 <!-- JSで動的に追加 -->
             </div>
-            <!-- トラック（ブロック表示） -->
-            <div class="flex-1 bg-gray-900 overflow-auto relative timeline-track" id="timeline-tracks">
-                <!-- 時間軸の目盛り（簡易） -->
-                <div class="h-6 border-b border-gray-700 sticky top-0 bg-gray-800/90 z-10 flex text-[10px] text-gray-500 items-center pl-2" id="time-ruler">
-                    <!-- CSSの背景で代用し、ここではシークバーの線のみ -->
-                </div>
-                <!-- 再生ヘッド線 -->
-                <div id="playhead" class="absolute top-0 bottom-0 w-px bg-red-500 z-20 pointer-events-none" style="left: 0%;"></div>
-                
-                <!-- トラックコンテナ (JSで動的に追加) -->
-                <div id="tracks-container" class="relative">
+            
+            <!-- トラック（タイムライン本体） -->
+            <div class="flex-1 bg-gray-900 overflow-x-auto overflow-y-scroll relative timeline-track" id="timeline-container">
+                <div class="min-w-full relative" id="timeline-scroll-area" style="width: 2000px; height: 100%;">
+                    
+                    <!-- 時間軸の目盛り -->
+                    <div class="h-6 border-b border-gray-700 sticky top-0 bg-gray-800/90 z-20 text-[10px] text-gray-500 cursor-text select-none" id="time-ruler">
+                        <!-- JSで目盛りを描画 -->
+                    </div>
+                    
+                    <!-- 再生ヘッド (赤い線) -->
+                    <div id="playhead" class="absolute top-0 bottom-0 w-[2px] bg-red-500 z-30 flex flex-col items-center cursor-ew-resize transform -translate-x-1/2" style="left: 0px;">
+                        <div class="w-3 h-3 bg-red-500 rotate-45 -mt-1.5 rounded-sm"></div>
+                    </div>
+                    
+                    <!-- トラック行コンテナ -->
+                    <div id="tracks-container" class="relative mt-2">
+                        <!-- JSでブロックを追加 -->
+                    </div>
                 </div>
             </div>
         </div>
@@ -219,21 +227,22 @@
     <!-- アプリケーションロジック -->
     <script>
         /**
-         * State & Configuration
+         * Core State & Configuration
          */
         const AppState = {
             canvasWidth: 1280,
             canvasHeight: 720,
-            layers: [], // 各レイヤーオブジェクトを格納
+            layers: [], 
             selectedLayerId: null,
-            currentTime: 0, // 秒
-            duration: 10, // デフォルト10秒。動画読み込み時に拡張
+            currentTime: 0, 
+            duration: 30, // 編集領域の基本長さ（秒）
             isPlaying: false,
             playbackRate: 1.0,
             animationFrameId: null,
             nextLayerId: 1,
             
-            // 録画用
+            timelinePixelsPerSecond: 100, // 1秒 = 100px
+            
             mediaRecorder: null,
             recordedChunks: [],
             isRecording: false
@@ -242,456 +251,714 @@
         // DOM Elements
         const canvas = document.getElementById('preview-canvas');
         const ctx = canvas.getContext('2d');
-        const fileImport = document.getElementById('file-import');
+        const canvasContainer = document.getElementById('canvas-container');
         
-        // Controls
-        const btnPlay = document.getElementById('btn-play');
-        const btnPause = document.getElementById('btn-pause');
-        const btnStop = document.getElementById('btn-stop');
-        const speedSlider = document.getElementById('speed-slider');
-        const speedValue = document.getElementById('speed-value');
-        const seekBar = document.getElementById('seek-bar');
+        // Properties Elements
+        const propsCommon = document.getElementById('common-properties');
+        const propsSpecific = document.getElementById('specific-properties');
+        const noSelectionMsg = document.getElementById('no-selection-msg');
+        
+        // Timeline Elements
+        const timelineContainer = document.getElementById('timeline-container');
+        const timelineScrollArea = document.getElementById('timeline-scroll-area');
+        const tracksContainer = document.getElementById('tracks-container');
+        const layerHeaders = document.getElementById('layer-headers');
+        const timeRuler = document.getElementById('time-ruler');
+        const playhead = document.getElementById('playhead');
         const timeCurrentText = document.getElementById('time-current');
         const timeTotalText = document.getElementById('time-total');
-        
-        // Properties Panel
-        const noSelectionMsg = document.getElementById('no-selection-msg');
-        const textProps = document.getElementById('text-properties');
-        const mediaProps = document.getElementById('media-properties');
-        
-        // Timeline
-        const layerHeaders = document.getElementById('layer-headers');
-        const tracksContainer = document.getElementById('tracks-container');
-        const playhead = document.getElementById('playhead');
 
         /**
-         * Core Rendering Loop
+         * Utility Functions
          */
-        let lastTime = 0;
-        function renderLoop(timestamp) {
-            if (!lastTime) lastTime = timestamp;
-            const deltaTime = (timestamp - lastTime) / 1000; // 秒に変換
-            lastTime = timestamp;
-
-            if (AppState.isPlaying && !AppState.isRecording) {
-                AppState.currentTime += deltaTime * AppState.playbackRate;
-                if (AppState.currentTime >= AppState.duration) {
-                    AppState.currentTime = AppState.duration;
-                    stopPlayback();
-                }
-                updateUIForTime();
-            }
-
-            drawCanvas();
-            AppState.animationFrameId = requestAnimationFrame(renderLoop);
+        function formatTimePrecision(seconds) {
+            const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+            const ms = Math.floor((seconds % 1) * 10).toString(); // 0.1s precision
+            return `${m}:${s}.${ms}`;
         }
 
+        // キャンバス上の座標を計算
+        function getMousePosOnCanvas(e) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            return {
+                x: (e.clientX - rect.left) * scaleX,
+                y: (e.clientY - rect.top) * scaleY
+            };
+        }
+
+        // レイヤーのバウンディングボックスを取得
+        function getBoundingBox(layer) {
+            if (layer.type === 'text') {
+                ctx.font = `${layer.size}px "${layer.font}"`;
+                const metrics = ctx.measureText(layer.text.split('\n')[0]); // 簡易的に1行目基準
+                const lines = layer.text.split('\n').length;
+                return { 
+                    x: layer.x, y: layer.y, 
+                    w: Math.max(metrics.width, 50), 
+                    h: layer.size * 1.2 * lines 
+                };
+            } else if (layer.element) {
+                const w = (layer.element.videoWidth || layer.element.width || 100) * (layer.scale / 100);
+                const h = (layer.element.videoHeight || layer.element.height || 100) * (layer.scale / 100);
+                return { x: layer.x, y: layer.y, w, h };
+            }
+            return null;
+        }
+
+        /**
+         * Canvas Rendering & Interactions
+         */
         function drawCanvas() {
-            // 背景クリア
+            // 背景
             ctx.fillStyle = '#000000';
             ctx.fillRect(0, 0, AppState.canvasWidth, AppState.canvasHeight);
 
-            // Zインデックス順（配列の逆順または下から）に描画
-            // 今回は配列の後ろのものが上（前面）に描画される標準的な仕組み
+            // Zオーダー（配列の先頭が奥、末尾が手前）
             AppState.layers.forEach(layer => {
-                // 時間の範囲内かチェック (プロトタイプでは常に表示とする簡易版も可だが、いちおう時間制御のモックをいれる)
-                // 単純化のため、プロトタイプでは動画レイヤーは常にアクティブとして扱う。
-                
-                if (layer.type === 'video' && layer.element) {
-                    // ビデオの再生位置をアプリの時間と同期
-                    // 注意: 頻繁なcurrentTimeの更新はブラウザによってパフォーマンスが落ちる。
-                    // 再生中はブラウザに任せ、シーク時のみ更新するアプローチもあるが、ここでは簡易同期。
-                    if (Math.abs(layer.element.currentTime - AppState.currentTime) > 0.1 && !AppState.isPlaying) {
-                        layer.element.currentTime = AppState.currentTime;
+                const t = AppState.currentTime;
+                // 時間外なら描画しない
+                if (t < layer.startTime || t > layer.startTime + layer.duration) {
+                    if (layer.type === 'video' && layer.element && !layer.element.paused) {
+                        layer.element.pause();
                     }
-                    
-                    try {
-                        const w = layer.element.videoWidth * (layer.scale / 100);
-                        const h = layer.element.videoHeight * (layer.scale / 100);
-                        ctx.drawImage(layer.element, layer.x, layer.y, w, h);
-                    } catch (e) { /* ignore ready state errors */ }
-                } 
-                else if (layer.type === 'image' && layer.element) {
-                     const w = layer.element.width * (layer.scale / 100);
-                     const h = layer.element.height * (layer.scale / 100);
-                     ctx.drawImage(layer.element, layer.x, layer.y, w, h);
+                    return;
                 }
-                else if (layer.type === 'text') {
-                    ctx.font = `${layer.size}px "${layer.font}"`;
+
+                ctx.save();
+                
+                let alpha = 1;
+                let drawX = layer.x;
+                let drawY = layer.y;
+                let scaleMult = 1;
+
+                // アニメーション In
+                if (t < layer.startTime + layer.animDuration) {
+                    const p = (t - layer.startTime) / layer.animDuration;
+                    if (layer.animIn === 'fade') alpha = p;
+                    if (layer.animIn === 'slide') drawX -= 100 * (1 - p);
+                    if (layer.animIn === 'zoom') { scaleMult = p; drawX += (getBoundingBox(layer)?.w||0)/2 * (1-p); drawY += (getBoundingBox(layer)?.h||0)/2 * (1-p); }
+                }
+                // アニメーション Out
+                const endTime = layer.startTime + layer.duration;
+                if (t > endTime - layer.animDuration) {
+                    const p = (endTime - t) / layer.animDuration;
+                    if (layer.animOut === 'fade') alpha = p;
+                    if (layer.animOut === 'slide') drawX += 100 * (1 - p);
+                    if (layer.animOut === 'zoom') scaleMult = p;
+                }
+
+                ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+                
+                // 描画実行
+                if (layer.type === 'text') {
+                    ctx.font = `${layer.size * scaleMult}px "${layer.font}"`;
                     ctx.fillStyle = layer.color;
                     ctx.textBaseline = 'top';
-                    
-                    // 複数行対応
-                    const lines = layer.text.split('\n');
-                    lines.forEach((line, index) => {
-                        ctx.fillText(line, layer.x, layer.y + (index * layer.size * 1.2));
+                    layer.text.split('\n').forEach((line, idx) => {
+                        ctx.fillText(line, drawX, drawY + (idx * layer.size * scaleMult * 1.2));
                     });
-                }
-            });
-        }
-
-        /**
-         * Playback Controls
-         */
-        function togglePlay() {
-            if (AppState.isPlaying) {
-                // Pause
-                AppState.isPlaying = false;
-                btnPlay.classList.remove('hidden');
-                btnPause.classList.add('hidden');
-                // pause all videos
-                AppState.layers.filter(l => l.type === 'video').forEach(l => l.element.pause());
-            } else {
-                // Play
-                if (AppState.currentTime >= AppState.duration) AppState.currentTime = 0;
-                AppState.isPlaying = true;
-                lastTime = performance.now();
-                btnPlay.classList.add('hidden');
-                btnPause.classList.remove('hidden');
-                
-                // play all videos
-                AppState.layers.filter(l => l.type === 'video').forEach(l => {
-                    l.element.playbackRate = AppState.playbackRate;
-                    l.element.play().catch(e=>console.log(e));
-                });
-            }
-        }
-
-        function stopPlayback() {
-            AppState.isPlaying = false;
-            AppState.currentTime = 0;
-            btnPlay.classList.remove('hidden');
-            btnPause.classList.add('hidden');
-            updateUIForTime();
-            AppState.layers.filter(l => l.type === 'video').forEach(l => {
-                l.element.pause();
-                l.element.currentTime = 0;
-            });
-        }
-
-        function formatTime(seconds) {
-            const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-            const s = Math.floor(seconds % 60).toString().padStart(2, '0');
-            return `${m}:${s}`;
-        }
-
-        function updateUIForTime() {
-            timeCurrentText.innerText = formatTime(AppState.currentTime);
-            timeTotalText.innerText = formatTime(AppState.duration);
-            
-            // シークバーの更新 (0-100)
-            if (AppState.duration > 0) {
-                seekBar.value = (AppState.currentTime / AppState.duration) * 100;
-                playhead.style.left = `${seekBar.value}%`;
-            }
-        }
-
-        // イベントリスナー: コントロール
-        btnPlay.addEventListener('click', togglePlay);
-        btnPause.addEventListener('click', togglePlay);
-        btnStop.addEventListener('click', stopPlayback);
-        
-        speedSlider.addEventListener('input', (e) => {
-            AppState.playbackRate = parseFloat(e.target.value);
-            speedValue.innerText = AppState.playbackRate.toFixed(1) + 'x';
-            // 実行中の動画にも反映
-            AppState.layers.filter(l => l.type === 'video').forEach(l => {
-                l.element.playbackRate = AppState.playbackRate;
-            });
-        });
-
-        seekBar.addEventListener('input', (e) => {
-            const percent = parseFloat(e.target.value);
-            AppState.currentTime = (percent / 100) * AppState.duration;
-            updateUIForTime();
-            // 動画の現在位置を更新（再生中なら一時停止してシークするのが安全だが簡易実装）
-            AppState.layers.filter(l => l.type === 'video').forEach(l => {
-                l.element.currentTime = AppState.currentTime;
-            });
-            drawCanvas(); // 即座に描画更新
-        });
-
-        /**
-         * Layer Management & Timeline
-         */
-        function addTextLayer() {
-            const newLayer = {
-                id: AppState.nextLayerId++,
-                type: 'text',
-                name: 'テキストレイヤー',
-                text: 'サンプルテキスト',
-                font: 'sans-serif',
-                size: 64,
-                color: '#ffffff',
-                x: AppState.canvasWidth / 2 - 100,
-                y: AppState.canvasHeight / 2 - 30
-            };
-            AppState.layers.push(newLayer);
-            selectLayer(newLayer.id);
-            renderTimeline();
-        }
-
-        function handleFileImport(e) {
-            const files = e.target.files;
-            if (!files.length) return;
-
-            Array.from(files).forEach(file => {
-                const url = URL.createObjectURL(file);
-                if (file.type.startsWith('video/')) {
-                    const video = document.createElement('video');
-                    video.src = url;
-                    video.muted = true; // プロトタイプのためオーディオ制御を簡略化
-                    video.onloadedmetadata = () => {
-                        // 動画の長さに合わせて全体のデュレーションを拡張
-                        if (video.duration > AppState.duration) {
-                            AppState.duration = video.duration;
-                            updateUIForTime();
+                } else if (layer.element) {
+                    // ビデオの同期
+                    if (layer.type === 'video') {
+                        const targetTime = (t - layer.startTime) + layer.trimStart;
+                        if (Math.abs(layer.element.currentTime - targetTime) > 0.1 && !AppState.isPlaying) {
+                            layer.element.currentTime = targetTime;
                         }
-                        const newLayer = {
-                            id: AppState.nextLayerId++,
-                            type: 'video',
-                            name: file.name,
-                            element: video,
-                            x: 0, y: 0, scale: 100
-                        };
-                        AppState.layers.push(newLayer);
-                        selectLayer(newLayer.id);
-                        renderTimeline();
-                    };
-                } else if (file.type.startsWith('image/')) {
-                    const img = new Image();
-                    img.onload = () => {
-                        const newLayer = {
-                            id: AppState.nextLayerId++,
-                            type: 'image',
-                            name: file.name,
-                            element: img,
-                            x: 0, y: 0, scale: 100
-                        };
-                        AppState.layers.push(newLayer);
-                        selectLayer(newLayer.id);
-                        renderTimeline();
-                    };
-                    img.src = url;
+                    }
+                    const w = (layer.element.videoWidth || layer.element.width) * (layer.scale / 100) * scaleMult;
+                    const h = (layer.element.videoHeight || layer.element.height) * (layer.scale / 100) * scaleMult;
+                    try { ctx.drawImage(layer.element, drawX, drawY, w, h); } catch(e){}
+                }
+
+                ctx.restore();
+                
+                // 選択中なら枠線とハンドルを描画
+                if (layer.id === AppState.selectedLayerId && !AppState.isPlaying && !AppState.isRecording) {
+                    const bbox = getBoundingBox(layer);
+                    if (bbox) {
+                        ctx.strokeStyle = '#60a5fa'; // Tailwind blue-400
+                        ctx.lineWidth = 2;
+                        ctx.setLineDash([5, 5]);
+                        ctx.strokeRect(bbox.x, bbox.y, bbox.w, bbox.h);
+                        ctx.setLineDash([]);
+                        
+                        // リサイズハンドル (右下)
+                        ctx.fillStyle = '#ffffff';
+                        ctx.strokeStyle = '#1e3a8a';
+                        ctx.beginPath();
+                        ctx.arc(bbox.x + bbox.w, bbox.y + bbox.h, 8, 0, Math.PI*2);
+                        ctx.fill();
+                        ctx.stroke();
+                    }
                 }
             });
-            e.target.value = ''; // リセット
         }
 
-        document.getElementById('btn-add-text').addEventListener('click', addTextLayer);
-        fileImport.addEventListener('change', handleFileImport);
+        // キャンバスのインタラクション
+        let cvsState = { mode: null, startX: 0, startY: 0, origX: 0, origY: 0, origVal: 0 };
         
-        document.getElementById('btn-delete-layer').addEventListener('click', () => {
-            if (AppState.selectedLayerId !== null) {
-                AppState.layers = AppState.layers.filter(l => l.id !== AppState.selectedLayerId);
-                AppState.selectedLayerId = null;
-                updatePropertiesPanel();
-                renderTimeline();
+        canvas.addEventListener('mousedown', (e) => {
+            if (AppState.isPlaying) return;
+            const pos = getMousePosOnCanvas(e);
+            
+            // まず選択中のレイヤーのハンドルをチェック
+            const selLayer = AppState.layers.find(l => l.id === AppState.selectedLayerId);
+            if (selLayer) {
+                const bbox = getBoundingBox(selLayer);
+                if (bbox) {
+                    const hx = bbox.x + bbox.w, hy = bbox.y + bbox.h;
+                    // ハンドルの当たり判定 (少し広め)
+                    if (Math.hypot(pos.x - hx, pos.y - hy) < 20) {
+                        cvsState = { mode: 'resize', startX: pos.x, startY: pos.y, origVal: selLayer.type === 'text' ? selLayer.size : selLayer.scale };
+                        return;
+                    }
+                }
+            }
+
+            // 次にレイヤー全体の当たり判定 (上から=逆順)
+            let hitId = null;
+            for (let i = AppState.layers.length - 1; i >= 0; i--) {
+                const l = AppState.layers[i];
+                // 現在時刻に表示されているものだけ選択可能
+                if (AppState.currentTime >= l.startTime && AppState.currentTime <= l.startTime + l.duration) {
+                    const bbox = getBoundingBox(l);
+                    if (bbox && pos.x >= bbox.x && pos.x <= bbox.x + bbox.w && pos.y >= bbox.y && pos.y <= bbox.y + bbox.h) {
+                        hitId = l.id;
+                        break;
+                    }
+                }
+            }
+
+            selectLayer(hitId);
+            if (hitId) {
+                const l = AppState.layers.find(x => x.id === hitId);
+                cvsState = { mode: 'drag', startX: pos.x, startY: pos.y, origX: l.x, origY: l.y };
             }
         });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!cvsState.mode || !AppState.selectedLayerId) return;
+            const pos = getMousePosOnCanvas(e);
+            const layer = AppState.layers.find(l => l.id === AppState.selectedLayerId);
+            
+            if (cvsState.mode === 'drag') {
+                layer.x = cvsState.origX + (pos.x - cvsState.startX);
+                layer.y = cvsState.origY + (pos.y - cvsState.startY);
+                updatePropertiesPanel();
+                drawCanvas();
+            } else if (cvsState.mode === 'resize') {
+                const deltaX = pos.x - cvsState.startX;
+                if (layer.type === 'text') {
+                    // X方向の移動量でフォントサイズを増減
+                    layer.size = Math.max(10, Math.floor(cvsState.origVal + deltaX * 0.2));
+                } else {
+                    // スケール変更
+                    layer.scale = Math.max(10, Math.floor(cvsState.origVal + deltaX * 0.2));
+                }
+                updatePropertiesPanel();
+                drawCanvas();
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            cvsState.mode = null;
+        });
+
+        /**
+         * Timeline Logic & Rendering
+         */
+        function renderRuler() {
+            timeRuler.innerHTML = '';
+            const width = AppState.duration * AppState.timelinePixelsPerSecond;
+            timelineScrollArea.style.width = `${Math.max(width + 200, timelineContainer.clientWidth)}px`;
+            
+            // 1秒ごとに目盛り
+            for (let i = 0; i <= AppState.duration; i++) {
+                const mark = document.createElement('div');
+                mark.className = 'absolute border-l border-gray-600 h-full pl-1 pointer-events-none';
+                mark.style.left = `${i * AppState.timelinePixelsPerSecond}px`;
+                mark.innerText = `${i}s`;
+                timeRuler.appendChild(mark);
+            }
+        }
 
         function renderTimeline() {
+            renderRuler();
             layerHeaders.innerHTML = '';
             tracksContainer.innerHTML = '';
 
-            // 逆順で表示（上が前面）
-            [...AppState.layers].reverse().forEach(layer => {
+            // 上にあるレイヤーほどトラックの上部に表示
+            [...AppState.layers].reverse().forEach((layer, idx) => {
                 // ヘッダー
-                const headerDiv = document.createElement('div');
-                headerDiv.className = `h-10 px-2 flex items-center border-b border-gray-700 cursor-pointer hover:bg-gray-700 text-sm truncate ${layer.id === AppState.selectedLayerId ? 'bg-gray-700 text-blue-400 font-bold' : 'text-gray-300'}`;
-                headerDiv.innerText = layer.name;
-                headerDiv.onclick = () => selectLayer(layer.id);
+                const header = document.createElement('div');
+                header.className = `h-10 px-2 flex items-center border-b border-gray-700 cursor-pointer hover:bg-gray-700 text-xs truncate select-none ${layer.id === AppState.selectedLayerId ? 'bg-gray-700 text-blue-400 font-bold' : 'text-gray-300'}`;
+                header.innerText = layer.name;
+                header.onclick = () => selectLayer(layer.id);
                 
-                // アイコン追加
                 const icon = document.createElement('span');
-                icon.className = 'mr-2 text-xs opacity-70';
+                icon.className = 'mr-1.5 text-xs opacity-80';
                 icon.innerText = layer.type === 'text' ? 'T' : (layer.type === 'video' ? '🎬' : '🖼️');
-                headerDiv.prepend(icon);
-                
-                layerHeaders.appendChild(headerDiv);
+                header.prepend(icon);
+                layerHeaders.appendChild(header);
 
-                // トラック（ブロック表示。簡易的に全期間表示）
+                // トラック行
                 const trackRow = document.createElement('div');
-                trackRow.className = 'h-10 border-b border-gray-700/50 flex items-center relative';
+                trackRow.className = 'h-10 border-b border-gray-700/50 relative';
                 
+                // ブロック
                 const block = document.createElement('div');
-                block.className = `h-6 rounded mx-1 absolute ${layer.type === 'text' ? 'bg-blue-600/80' : 'bg-green-600/80'}`;
-                block.style.left = '0%';
-                block.style.width = '100%'; // 全体幅。時間制御実装時は調整
-                block.style.boxShadow = layer.id === AppState.selectedLayerId ? '0 0 0 2px #fff' : 'none';
+                const isSelected = layer.id === AppState.selectedLayerId;
+                block.className = `timeline-block ${layer.type === 'text' ? 'bg-blue-600' : (layer.type==='video' ? 'bg-green-600' : 'bg-purple-600')} ${isSelected ? 'selected' : 'opacity-80 hover:opacity-100'}`;
+                block.style.left = `${layer.startTime * AppState.timelinePixelsPerSecond}px`;
+                block.style.width = `${layer.duration * AppState.timelinePixelsPerSecond}px`;
+                block.dataset.id = layer.id;
+
+                // 左ハンドル
+                const hLeft = document.createElement('div');
+                hLeft.className = 'resize-handle handle-left';
+                block.appendChild(hLeft);
                 
+                // コンテンツ
+                const content = document.createElement('div');
+                content.className = 'block-content';
+                content.innerText = layer.name;
+                block.appendChild(content);
+
+                // 右ハンドル
+                const hRight = document.createElement('div');
+                hRight.className = 'resize-handle handle-right';
+                block.appendChild(hRight);
+
                 trackRow.appendChild(block);
                 tracksContainer.appendChild(trackRow);
             });
+            updatePlayhead();
         }
 
-        function selectLayer(id) {
-            AppState.selectedLayerId = id;
-            renderTimeline();
-            updatePropertiesPanel();
+        function updatePlayhead() {
+            const x = AppState.currentTime * AppState.timelinePixelsPerSecond;
+            playhead.style.left = `${x}px`;
+            timeCurrentText.innerText = formatTimePrecision(AppState.currentTime);
+            timeTotalText.innerText = formatTimePrecision(AppState.duration);
         }
+
+        // タイムラインインタラクション (シーク、移動、トリミング)
+        let tlState = { mode: null, id: null, startX: 0, origStart: 0, origDur: 0, origTrim: 0 };
+
+        // ルーラー/背景クリックでシーク
+        timelineScrollArea.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.timeline-block')) return; // ブロッククリック時は無視
+            
+            const rect = timelineScrollArea.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            let time = x / AppState.timelinePixelsPerSecond;
+            time = Math.max(0, Math.min(time, AppState.duration));
+            
+            AppState.currentTime = time;
+            updatePlayhead();
+            drawCanvas();
+            tlState = { mode: 'seek' };
+            
+            // ビデオ再生位置同期
+            AppState.layers.forEach(l => {
+                if (l.type === 'video' && l.element && time >= l.startTime && time <= l.startTime + l.duration) {
+                    l.element.currentTime = (time - l.startTime) + l.trimStart;
+                }
+            });
+        });
+
+        // ブロックのイベント (Event Delegation)
+        tracksContainer.addEventListener('mousedown', (e) => {
+            const block = e.target.closest('.timeline-block');
+            if (!block) return;
+            
+            const id = parseInt(block.dataset.id);
+            selectLayer(id);
+            const layer = AppState.layers.find(l => l.id === id);
+            
+            tlState.id = id;
+            tlState.startX = e.clientX;
+            tlState.origStart = layer.startTime;
+            tlState.origDur = layer.duration;
+            tlState.origTrim = layer.trimStart;
+
+            if (e.target.classList.contains('handle-left')) {
+                tlState.mode = 'resize-left';
+                e.stopPropagation();
+            } else if (e.target.classList.contains('handle-right')) {
+                tlState.mode = 'resize-right';
+                e.stopPropagation();
+            } else {
+                tlState.mode = 'move';
+            }
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!tlState.mode) return;
+            
+            if (tlState.mode === 'seek') {
+                const rect = timelineScrollArea.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                AppState.currentTime = Math.max(0, Math.min(x / AppState.timelinePixelsPerSecond, AppState.duration));
+                updatePlayhead();
+                drawCanvas();
+                return;
+            }
+
+            const layer = AppState.layers.find(l => l.id === tlState.id);
+            if (!layer) return;
+
+            const deltaX = e.clientX - tlState.startX;
+            const deltaT = deltaX / AppState.timelinePixelsPerSecond;
+
+            if (tlState.mode === 'move') {
+                layer.startTime = Math.max(0, tlState.origStart + deltaT);
+            } else if (tlState.mode === 'resize-right') {
+                const maxDur = (layer.type === 'video' ? layer.mediaDuration - layer.trimStart : 999);
+                layer.duration = Math.max(0.1, Math.min(tlState.origDur + deltaT, maxDur));
+            } else if (tlState.mode === 'resize-left') {
+                // 左端を動かすと、startTime, duration, trimStart が変化する
+                const newStart = Math.max(0, tlState.origStart + deltaT);
+                const actualDelta = newStart - tlState.origStart;
+                
+                if (tlState.origDur - actualDelta > 0.1) {
+                    layer.startTime = newStart;
+                    layer.duration = tlState.origDur - actualDelta;
+                    if (layer.type === 'video') {
+                        layer.trimStart = Math.max(0, tlState.origTrim + actualDelta);
+                    }
+                }
+            }
+
+            // 更新 (重いのでDOM直接更新)
+            const block = document.querySelector(`.timeline-block[data-id="${layer.id}"]`);
+            if (block) {
+                block.style.left = `${layer.startTime * AppState.timelinePixelsPerSecond}px`;
+                block.style.width = `${layer.duration * AppState.timelinePixelsPerSecond}px`;
+            }
+            
+            // シーク位置をブロック開始に合わせる(任意)
+            if (tlState.mode === 'resize-left' || tlState.mode === 'move') {
+                 AppState.currentTime = layer.startTime;
+                 updatePlayhead();
+            }
+            drawCanvas();
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (tlState.mode) {
+                renderTimeline(); // 確定時に再描画
+                tlState.mode = null;
+            }
+        });
+
 
         /**
          * Properties Panel Integration
          */
+        function selectLayer(id) {
+            AppState.selectedLayerId = id;
+            renderTimeline();
+            updatePropertiesPanel();
+            drawCanvas();
+        }
+
         function updatePropertiesPanel() {
             const layer = AppState.layers.find(l => l.id === AppState.selectedLayerId);
             
-            noSelectionMsg.classList.add('hidden');
-            textProps.classList.add('hidden');
-            mediaProps.classList.add('hidden');
-
             if (!layer) {
                 noSelectionMsg.classList.remove('hidden');
+                propsCommon.classList.add('hidden');
                 return;
             }
 
+            noSelectionMsg.classList.add('hidden');
+            propsCommon.classList.remove('hidden');
+            
+            // 共通プロパティの更新
+            document.getElementById('prop-pos-x').value = Math.round(layer.x);
+            document.getElementById('prop-pos-y').value = Math.round(layer.y);
+            document.getElementById('prop-anim-in').value = layer.animIn;
+            document.getElementById('prop-anim-out').value = layer.animOut;
+            document.getElementById('prop-anim-dur').value = layer.animDuration;
+
+            // 専用プロパティの生成
+            propsSpecific.innerHTML = '';
             if (layer.type === 'text') {
-                textProps.classList.remove('hidden');
-                document.getElementById('prop-text-content').value = layer.text;
-                document.getElementById('prop-font-family').value = layer.font;
-                document.getElementById('prop-font-size').value = layer.size;
-                document.getElementById('prop-color').value = layer.color;
-                document.getElementById('prop-color-text').value = layer.color;
-                document.getElementById('prop-pos-x').value = layer.x;
-                document.getElementById('prop-pos-y').value = layer.y;
+                propsSpecific.innerHTML = `
+                    <div>
+                        <label class="block text-[11px] text-gray-500 mb-1">テキスト</label>
+                        <textarea id="prop-t-text" rows="3" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white focus:outline-none focus:border-blue-500">${layer.text}</textarea>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[11px] text-gray-500 mb-1">フォント</label>
+                            <select id="prop-t-font" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white">
+                                <option value="sans-serif" ${layer.font==='sans-serif'?'selected':''}>ゴシック</option>
+                                <option value="serif" ${layer.font==='serif'?'selected':''}>明朝</option>
+                                <option value="Impact" ${layer.font==='Impact'?'selected':''}>Impact</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] text-gray-500 mb-1">サイズ</label>
+                            <input type="number" id="prop-t-size" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white" value="${layer.size}">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] text-gray-500 mb-1">色</label>
+                        <div class="flex items-center gap-2">
+                            <input type="color" id="prop-t-color" value="${layer.color}" class="w-8 h-8 rounded bg-transparent p-0 border-0 cursor-pointer">
+                            <input type="text" id="prop-t-colortxt" value="${layer.color}" class="flex-1 bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white">
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('prop-t-text').addEventListener('input', e => { layer.text = e.target.value; drawCanvas(); });
+                document.getElementById('prop-t-font').addEventListener('change', e => { layer.font = e.target.value; drawCanvas(); });
+                document.getElementById('prop-t-size').addEventListener('input', e => { layer.size = parseInt(e.target.value)||10; drawCanvas(); });
+                const c1 = document.getElementById('prop-t-color'), c2 = document.getElementById('prop-t-colortxt');
+                c1.addEventListener('input', e => { c2.value = e.target.value; layer.color = e.target.value; drawCanvas(); });
+                c2.addEventListener('input', e => { c1.value = e.target.value; layer.color = e.target.value; drawCanvas(); });
+                
             } else {
-                mediaProps.classList.remove('hidden');
-                document.getElementById('prop-media-name').value = layer.name;
-                document.getElementById('prop-media-scale').value = layer.scale;
-                document.getElementById('prop-media-x').value = layer.x;
-                document.getElementById('prop-media-y').value = layer.y;
+                 propsSpecific.innerHTML = `
+                    <div>
+                        <label class="block text-[11px] text-gray-500 mb-1">ファイル名</label>
+                        <input type="text" disabled value="${layer.name}" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-gray-500">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] text-gray-500 mb-1">スケール (%)</label>
+                        <input type="number" id="prop-m-scale" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white" value="${layer.scale}">
+                    </div>
+                `;
+                document.getElementById('prop-m-scale').addEventListener('input', e => { layer.scale = parseInt(e.target.value)||10; drawCanvas(); });
             }
         }
 
-        // イベントリスナー: テキストプロパティ更新
-        document.getElementById('prop-text-content').addEventListener('input', (e) => updateLayerProp('text', e.target.value));
-        document.getElementById('prop-font-family').addEventListener('change', (e) => updateLayerProp('font', e.target.value));
-        document.getElementById('prop-font-size').addEventListener('input', (e) => updateLayerProp('size', parseInt(e.target.value) || 10));
-        document.getElementById('prop-color').addEventListener('input', (e) => {
-            document.getElementById('prop-color-text').value = e.target.value;
-            updateLayerProp('color', e.target.value);
-        });
-        document.getElementById('prop-color-text').addEventListener('input', (e) => {
-            document.getElementById('prop-color').value = e.target.value;
-            updateLayerProp('color', e.target.value);
-        });
-        document.getElementById('prop-pos-x').addEventListener('input', (e) => updateLayerProp('x', parseInt(e.target.value) || 0));
-        document.getElementById('prop-pos-y').addEventListener('input', (e) => updateLayerProp('y', parseInt(e.target.value) || 0));
+        // 共通プロパティのリスナー
+        const bindProp = (id, key, parser = v => v) => {
+            const el = document.getElementById(id);
+            if(el) el.addEventListener('input', e => {
+                const layer = AppState.layers.find(l => l.id === AppState.selectedLayerId);
+                if (layer) { layer[key] = parser(e.target.value); drawCanvas(); }
+            });
+        };
+        bindProp('prop-pos-x', 'x', parseFloat);
+        bindProp('prop-pos-y', 'y', parseFloat);
+        bindProp('prop-anim-in', 'animIn');
+        bindProp('prop-anim-out', 'animOut');
+        bindProp('prop-anim-dur', 'animDuration', parseFloat);
 
-        // メディアプロパティ更新
-        document.getElementById('prop-media-scale').addEventListener('input', (e) => updateLayerProp('scale', parseInt(e.target.value) || 100));
-        document.getElementById('prop-media-x').addEventListener('input', (e) => updateLayerProp('x', parseInt(e.target.value) || 0));
-        document.getElementById('prop-media-y').addEventListener('input', (e) => updateLayerProp('y', parseInt(e.target.value) || 0));
 
-        function updateLayerProp(key, value) {
-            const layer = AppState.layers.find(l => l.id === AppState.selectedLayerId);
-            if (layer) {
-                layer[key] = value;
-                drawCanvas(); // 即座に反映
+        /**
+         * Layer Creation
+         */
+        function createBaseLayer(name, type) {
+            return {
+                id: AppState.nextLayerId++,
+                type: type, name: name,
+                x: AppState.canvasWidth/2, y: AppState.canvasHeight/2,
+                startTime: AppState.currentTime, duration: 5,
+                animIn: 'none', animOut: 'none', animDuration: 0.5,
+                trimStart: 0, mediaDuration: 0
+            };
+        }
+
+        document.getElementById('btn-add-text').addEventListener('click', () => {
+            const layer = {
+                ...createBaseLayer('テキスト', 'text'),
+                text: 'テキスト', font: 'sans-serif', size: 64, color: '#ffffff',
+                x: AppState.canvasWidth / 2 - 100, y: AppState.canvasHeight / 2 - 32
+            };
+            AppState.layers.push(layer);
+            selectLayer(layer.id);
+        });
+
+        document.getElementById('file-import').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const url = URL.createObjectURL(file);
+            
+            if (file.type.startsWith('video/')) {
+                const video = document.createElement('video');
+                video.src = url; video.muted = true;
+                video.onloadedmetadata = () => {
+                    const layer = {
+                        ...createBaseLayer(file.name, 'video'),
+                        element: video, scale: 100,
+                        duration: video.duration, mediaDuration: video.duration,
+                        x: (AppState.canvasWidth - video.videoWidth)/2, y: (AppState.canvasHeight - video.videoHeight)/2
+                    };
+                    if (layer.startTime + layer.duration > AppState.duration) AppState.duration = Math.ceil(layer.startTime + layer.duration + 5);
+                    AppState.layers.push(layer);
+                    selectLayer(layer.id);
+                };
+            } else if (file.type.startsWith('image/')) {
+                const img = new Image();
+                img.onload = () => {
+                    const layer = {
+                        ...createBaseLayer(file.name, 'image'),
+                        element: img, scale: 100,
+                        x: (AppState.canvasWidth - img.width)/2, y: (AppState.canvasHeight - img.height)/2
+                    };
+                    AppState.layers.push(layer);
+                    selectLayer(layer.id);
+                };
+                img.src = url;
             }
+            e.target.value = '';
+        });
+
+        document.getElementById('btn-delete-layer').addEventListener('click', () => {
+            if (AppState.selectedLayerId) {
+                AppState.layers = AppState.layers.filter(l => l.id !== AppState.selectedLayerId);
+                selectLayer(null);
+            }
+        });
+
+
+        /**
+         * Playback & Loop
+         */
+        const btnPlay = document.getElementById('btn-play');
+        const btnPause = document.getElementById('btn-pause');
+        
+        function togglePlay() {
+            if (AppState.isPlaying) {
+                AppState.isPlaying = false;
+                btnPlay.classList.remove('hidden'); btnPause.classList.add('hidden');
+                AppState.layers.forEach(l => l.type === 'video' && l.element.pause());
+            } else {
+                if (AppState.currentTime >= AppState.duration) AppState.currentTime = 0;
+                AppState.isPlaying = true;
+                lastTime = performance.now();
+                btnPlay.classList.add('hidden'); btnPause.classList.remove('hidden');
+                
+                AppState.layers.forEach(l => {
+                    if (l.type === 'video' && AppState.currentTime >= l.startTime && AppState.currentTime <= l.startTime + l.duration) {
+                        l.element.currentTime = (AppState.currentTime - l.startTime) + l.trimStart;
+                        l.element.playbackRate = AppState.playbackRate;
+                        l.element.play().catch(()=>{});
+                    }
+                });
+            }
+        }
+
+        document.getElementById('btn-play').addEventListener('click', togglePlay);
+        document.getElementById('btn-pause').addEventListener('click', togglePlay);
+        document.getElementById('btn-stop').addEventListener('click', () => {
+            AppState.isPlaying = false;
+            AppState.currentTime = 0;
+            btnPlay.classList.remove('hidden'); btnPause.classList.add('hidden');
+            AppState.layers.forEach(l => l.type === 'video' && l.element.pause());
+            updatePlayhead(); drawCanvas();
+        });
+
+        document.getElementById('speed-slider').addEventListener('input', e => {
+            AppState.playbackRate = parseFloat(e.target.value);
+            document.getElementById('speed-value').innerText = AppState.playbackRate.toFixed(1) + 'x';
+            AppState.layers.forEach(l => l.type === 'video' && (l.element.playbackRate = AppState.playbackRate));
+        });
+
+        let lastTime = 0;
+        function renderLoop(timestamp) {
+            if (!lastTime) lastTime = timestamp;
+            const dt = (timestamp - lastTime) / 1000;
+            lastTime = timestamp;
+
+            if (AppState.isPlaying && !AppState.isRecording) {
+                AppState.currentTime += dt * AppState.playbackRate;
+                if (AppState.currentTime >= AppState.duration) {
+                    AppState.currentTime = AppState.duration;
+                    togglePlay(); // Stop
+                }
+                updatePlayhead();
+                
+                // 動的再生管理
+                AppState.layers.forEach(l => {
+                    if (l.type === 'video') {
+                        const inRange = AppState.currentTime >= l.startTime && AppState.currentTime <= l.startTime + l.duration;
+                        if (inRange && l.element.paused) l.element.play().catch(()=>{});
+                        if (!inRange && !l.element.paused) l.element.pause();
+                    }
+                });
+            }
+
+            drawCanvas();
+            requestAnimationFrame(renderLoop);
         }
 
         /**
-         * Export / Recording (MediaRecorder API)
+         * Export
          */
-        const btnExport = document.getElementById('btn-export');
-        const statusText = document.getElementById('status-text');
-
-        btnExport.addEventListener('click', async () => {
+        document.getElementById('btn-export').addEventListener('click', () => {
             if (AppState.layers.length === 0) return;
-            
-            // 録画準備
             AppState.isRecording = true;
-            stopPlayback(); // 一旦停止して0に戻す
-            AppState.currentTime = 0;
+            if(AppState.isPlaying) togglePlay();
             
-            const stream = canvas.captureStream(30); // 30fps
-            const options = { mimeType: 'video/webm; codecs=vp9' };
+            const btn = document.getElementById('btn-export');
+            const status = document.getElementById('status-text');
+            btn.disabled = true;
+            btn.innerHTML = '書き出し中...';
             
-            try {
-                AppState.mediaRecorder = new MediaRecorder(stream, options);
-            } catch (e) {
-                AppState.mediaRecorder = new MediaRecorder(stream); // フォールバック
-            }
+            // 全体の長さを計算 (一番後ろのレイヤーの終了時間まで)
+            let maxTime = 1;
+            AppState.layers.forEach(l => maxTime = Math.max(maxTime, l.startTime + l.duration));
+            
+            const stream = canvas.captureStream(30);
+            try { AppState.mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' }); }
+            catch (e) { AppState.mediaRecorder = new MediaRecorder(stream); }
 
             AppState.recordedChunks = [];
-            AppState.mediaRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0) AppState.recordedChunks.push(e.data);
-            };
-
+            AppState.mediaRecorder.ondataavailable = e => { if (e.data.size > 0) AppState.recordedChunks.push(e.data); };
             AppState.mediaRecorder.onstop = () => {
                 const blob = new Blob(AppState.recordedChunks, { type: 'video/webm' });
                 const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = url;
-                a.download = 'output.webm';
-                document.body.appendChild(a);
+                const a = document.createElement('a'); a.href = url; a.download = 'output.webm';
                 a.click();
                 
-                setTimeout(() => {
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-                }, 100);
-                
                 AppState.isRecording = false;
-                btnExport.disabled = false;
-                btnExport.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg> 動画を保存 (WebM)';
-                statusText.innerText = "書き出し完了！";
-                setTimeout(() => statusText.innerText = "", 3000);
+                btn.disabled = false;
+                btn.innerHTML = '動画を保存 (WebM)';
+                status.innerText = "完了！";
+                setTimeout(() => status.innerText = "", 3000);
             };
 
-            // UI更新
-            btnExport.disabled = true;
-            btnExport.innerHTML = '<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 書き出し中...';
-            statusText.innerText = "";
-
-            // 動画再生の準備
-            AppState.layers.filter(l => l.type === 'video').forEach(l => {
-                l.element.playbackRate = 1.0;
-                l.element.currentTime = 0;
-            });
-
-            // 録画開始
             AppState.mediaRecorder.start();
             
-            // 録画用のアニメーションループ (等速で処理)
-            const fps = 30;
-            const frameTime = 1000 / fps;
             let exportTime = 0;
-
-            function exportFrame() {
-                if (exportTime >= AppState.duration) {
+            const fps = 30;
+            
+            function renderFrame() {
+                if (exportTime > maxTime) {
                     AppState.mediaRecorder.stop();
                     return;
                 }
                 
                 AppState.currentTime = exportTime;
-                
-                // 動画を同期
-                AppState.layers.filter(l => l.type === 'video').forEach(l => {
-                    if (l.element.currentTime < exportTime) {
-                         // 強制的に進める（実際はPlayした状態で回す方が滑らかですが、プロトタイプとしてはこれで描画します）
-                         l.element.currentTime = exportTime;
+                AppState.layers.forEach(l => {
+                    if (l.type === 'video') {
+                        if (exportTime >= l.startTime && exportTime <= l.startTime + l.duration) {
+                            l.element.currentTime = (exportTime - l.startTime) + l.trimStart;
+                        }
                     }
                 });
-
-                drawCanvas();
-                updateUIForTime();
                 
-                exportTime += (1 / fps);
-                setTimeout(exportFrame, frameTime);
+                updatePlayhead();
+                drawCanvas();
+                exportTime += (1/fps);
+                setTimeout(renderFrame, 1000/fps);
             }
-            
-            exportFrame();
+            renderFrame();
         });
 
+        // Init
+        renderTimeline();
+        requestAnimationFrame(renderLoop);
 
-        // 初期化
-        updateUIForTime();
-        renderLoop(performance.now()); // ループ開始
-        
     </script>
 </body>
 </html>
