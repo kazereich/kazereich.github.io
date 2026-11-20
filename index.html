@@ -1,1053 +1,679 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-  Play, Pause, Square, Upload, Type, Music, Video, Image as ImageIcon, 
-  Download, Settings, Volume2, Mic, Trash2, SplitSquareHorizontal, Layers,
-  Move, Maximize, Settings2, X
-} from 'lucide-react';
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Video Editor (YMM4 Clone)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        ::-webkit-scrollbar { height: 8px; width: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        .canvas-container { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden; }
+        canvas { max-width: 100%; max-height: 100%; box-shadow: 0 4px 6px rgba(0,0,0,0.3); cursor: grab; }
+        canvas:active { cursor: grabbing; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white h-screen overflow-hidden flex flex-col">
+    <div id="root" class="h-full"></div>
 
-// --- Utility Functions ---
-const generateId = () => Math.random().toString(36).substr(2, 9);
-const formatTime = (seconds) => {
-  const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-  const s = Math.floor(seconds % 60).toString().padStart(2, '0');
-  const ms = Math.floor((seconds % 1) * 10).toString();
-  return `${m}:${s}.${ms}`;
-};
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
 
-// --- Resolution Presets ---
-const RESOLUTIONS = {
-  '144p': { width: 256, height: 144, defaultVideoBitrate: 300000, defaultAudioBitrate: 64000 },
-  '360p': { width: 640, height: 360, defaultVideoBitrate: 1000000, defaultAudioBitrate: 96000 },
-  '480p': { width: 854, height: 480, defaultVideoBitrate: 2500000, defaultAudioBitrate: 128000 },
-  '720p': { width: 1280, height: 720, defaultVideoBitrate: 5000000, defaultAudioBitrate: 128000 },
-  '1080p': { width: 1920, height: 1080, defaultVideoBitrate: 8000000, defaultAudioBitrate: 192000 },
-  '4K': { width: 3840, height: 2160, defaultVideoBitrate: 35000000, defaultAudioBitrate: 320000 },
-};
+        const RESOLUTIONS = {
+            "144p": { w: 256, h: 144 },
+            "360p": { w: 640, h: 360 },
+            "720p": { w: 1280, h: 720 },
+            "1080p": { w: 1920, h: 1080 },
+            "4K": { w: 3840, h: 2160 }
+        };
 
-// --- Default Layer Template ---
-const createLayer = (type, name, payload = {}) => ({
-  id: generateId(),
-  type, // 'video', 'audio', 'text', 'image'
-  name,
-  startTime: payload.startTime || 0,
-  duration: payload.duration || 5,
-  trimStart: 0,
-  mediaDuration: payload.duration || 5, // オリジナルメディアの長さ
-  x: payload.x || 640,
-  y: payload.y || 360,
-  scale: 100, // パーセント
-  // Text specific
-  text: payload.text || 'テキスト',
-  font: payload.font || 'sans-serif',
-  size: payload.size || 64,
-  color: payload.color || '#ffffff',
-  outlineColor: payload.outlineColor || '#000000',
-  outlineWidth: payload.outlineWidth || 4,
-  // Animation
-  animIn: 'none', animOut: 'none', animDuration: 0.5,
-  // Media element reference (not fully reactive, managed via ref mostly, but kept here for easy access)
-  element: payload.element || null,
-  volume: 1,
-});
+        function App() {
+            // プロジェクト設定
+            const [settings, setSettings] = useState({
+                res: "720p", width: 1280, height: 720, fps: 30, vBitrate: 2500000, aBitrate: 128000
+            });
+            const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-export default function VideoEditorApp() {
-  // --- Global State ---
-  const [layers, setLayers] = useState([]);
-  const [selectedLayerId, setSelectedLayerId] = useState(null);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(30); // タイムライン全体の長さ
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackRate, setPlaybackRate] = useState(1);
-  const [isExporting, setIsExporting] = useState(false);
-  
-  // --- Project Settings State ---
-  const [projectSettings, setProjectSettings] = useState({
-    resolutionLabel: '1080p',
-    width: 1920,
-    height: 1080,
-    fps: 30,
-    videoBitrate: 8000000, // 8 Mbps
-    audioBitrate: 192000,  // 192 kbps
-  });
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-
-  // --- Refs ---
-  const canvasRef = useRef(null);
-  const reqAnimRef = useRef(null);
-  const lastTimeRef = useRef(0);
-  const stateRef = useRef({ layers, currentTime, selectedLayerId, isPlaying, playbackRate });
-  
-  // AudioContext for Exporting Audio
-  const audioCtxRef = useRef(null);
-  const destNodeRef = useRef(null);
-
-  // Update ref when state changes to access latest state in animation loop
-  useEffect(() => {
-    stateRef.current = { layers, currentTime, selectedLayerId, isPlaying, playbackRate };
-  }, [layers, currentTime, selectedLayerId, isPlaying, playbackRate]);
-
-  // --- Initialize Audio Context (Needs user interaction) ---
-  const initAudio = () => {
-    if (!audioCtxRef.current) {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      audioCtxRef.current = new Ctx();
-      destNodeRef.current = audioCtxRef.current.createMediaStreamDestination();
-    }
-  };
-
-  // --- Animation & Rendering Loop ---
-  const drawCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    const state = stateRef.current;
-    const t = state.currentTime;
-
-    // Clear background
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Draw layers (reverse order for z-index, assuming index 0 is bottom)
-    const sortedLayers = [...state.layers].reverse();
-
-    sortedLayers.forEach(layer => {
-      // Check if layer is active at current time
-      if (t < layer.startTime || t > layer.startTime + layer.duration) {
-        // Sync media pause
-        if ((layer.type === 'video' || layer.type === 'audio') && layer.element && !layer.element.paused) {
-          layer.element.pause();
-        }
-        return;
-      }
-
-      ctx.save();
-      
-      let alpha = 1;
-      let drawX = layer.x;
-      let drawY = layer.y;
-      let scaleMult = layer.scale / 100;
-      let rotation = 0;
-
-      // Handle Animations
-      const applyAnim = (progress, type, isIn) => {
-        if (type === 'fade') alpha = progress;
-        if (type === 'slide-left') drawX += (isIn ? -200 : 200) * (1 - progress);
-        if (type === 'slide-right') drawX += (isIn ? 200 : -200) * (1 - progress);
-        if (type === 'slide-top') drawY += (isIn ? -200 : 200) * (1 - progress);
-        if (type === 'slide-bottom') drawY += (isIn ? 200 : -200) * (1 - progress);
-        if (type === 'zoom-in') scaleMult *= progress;
-        if (type === 'zoom-out') scaleMult *= (1.5 - 0.5 * progress); // simplified
-        if (type === 'spin') rotation = (isIn ? (1-progress) : -(1-progress)) * Math.PI * 2;
-      };
-
-      if (t < layer.startTime + layer.animDuration && layer.animIn !== 'none') {
-        const p = (t - layer.startTime) / layer.animDuration;
-        applyAnim(p, layer.animIn, true);
-      }
-      const endTime = layer.startTime + layer.duration;
-      if (t > endTime - layer.animDuration && layer.animOut !== 'none') {
-        const p = (endTime - t) / layer.animDuration;
-        applyAnim(p, layer.animOut, false);
-      }
-
-      ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
-      ctx.translate(drawX, drawY);
-      if (rotation) ctx.rotate(rotation);
-
-      if (layer.type === 'text') {
-        ctx.font = `bold ${layer.size * scaleMult}px "${layer.font}"`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        
-        // Draw Outline
-        if (layer.outlineWidth > 0) {
-          ctx.strokeStyle = layer.outlineColor;
-          ctx.lineWidth = layer.outlineWidth * scaleMult;
-          ctx.lineJoin = 'round';
-          ctx.strokeText(layer.text, 0, 0);
-        }
-        // Draw Fill
-        ctx.fillStyle = layer.color;
-        ctx.fillText(layer.text, 0, 0);
-        
-      } else if ((layer.type === 'video' || layer.type === 'image') && layer.element) {
-        // Sync Video time
-        if (layer.type === 'video') {
-           const targetTime = (t - layer.startTime) + layer.trimStart;
-           if (Math.abs(layer.element.currentTime - targetTime) > 0.1 && !state.isPlaying) {
-               layer.element.currentTime = targetTime;
-           }
-        }
-        const w = (layer.element.videoWidth || layer.element.width || 100) * scaleMult;
-        const h = (layer.element.videoHeight || layer.element.height || 100) * scaleMult;
-        try { ctx.drawImage(layer.element, -w/2, -h/2, w, h); } catch(e){}
-      } else if (layer.type === 'audio' && layer.element) {
-        // Sync Audio
-        const targetTime = (t - layer.startTime) + layer.trimStart;
-        if (Math.abs(layer.element.currentTime - targetTime) > 0.1 && !state.isPlaying) {
-            layer.element.currentTime = targetTime;
-        }
-      }
-
-      ctx.restore();
-
-      // Draw Selection Bounding Box (Only when not playing/exporting)
-      if (layer.id === state.selectedLayerId && !state.isPlaying && !isExporting) {
-        ctx.save();
-        ctx.translate(drawX, drawY);
-        let w = 0, h = 0;
-        if (layer.type === 'text') {
-           ctx.font = `bold ${layer.size * scaleMult}px "${layer.font}"`;
-           const metrics = ctx.measureText(layer.text);
-           w = metrics.width + 20; h = layer.size * scaleMult + 20;
-        } else if (layer.element) {
-           w = (layer.element.videoWidth || layer.element.width || 100) * scaleMult;
-           h = (layer.element.videoHeight || layer.element.height || 100) * scaleMult;
-        }
-        if (w && h) {
-          ctx.strokeStyle = '#3b82f6';
-          ctx.lineWidth = 2;
-          ctx.setLineDash([5, 5]);
-          ctx.strokeRect(-w/2, -h/2, w, h);
-          ctx.setLineDash([]);
-          // Resize handle bottom right
-          ctx.fillStyle = '#fff';
-          ctx.strokeStyle = '#3b82f6';
-          ctx.beginPath();
-          ctx.arc(w/2, h/2, 6, 0, Math.PI*2);
-          ctx.fill(); ctx.stroke();
-        }
-        ctx.restore();
-      }
-    });
-  }, [isExporting]);
-
-  const loop = useCallback((timestamp) => {
-    if (!lastTimeRef.current) lastTimeRef.current = timestamp;
-    const dt = (timestamp - lastTimeRef.current) / 1000;
-    lastTimeRef.current = timestamp;
-
-    if (stateRef.current.isPlaying && !isExporting) {
-      setCurrentTime(prev => {
-        let next = prev + dt * stateRef.current.playbackRate;
-        if (next >= duration) {
-          setIsPlaying(false);
-          next = duration;
-        }
-        return next;
-      });
-
-      // Handle media playback
-      stateRef.current.layers.forEach(l => {
-        if (l.type === 'video' || l.type === 'audio') {
-          const inRange = stateRef.current.currentTime >= l.startTime && stateRef.current.currentTime <= l.startTime + l.duration;
-          if (inRange && l.element && l.element.paused) {
-            l.element.playbackRate = stateRef.current.playbackRate;
-            l.element.play().catch(()=>{});
-          }
-          if (!inRange && l.element && !l.element.paused) {
-            l.element.pause();
-          }
-        }
-      });
-    }
-
-    drawCanvas();
-    reqAnimRef.current = requestAnimationFrame(loop);
-  }, [duration, drawCanvas, isExporting]);
-
-  useEffect(() => {
-    reqAnimRef.current = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(reqAnimRef.current);
-  }, [loop]);
-
-  // Force redraw when certain states change while paused
-  useEffect(() => {
-    if (!isPlaying) drawCanvas();
-  }, [currentTime, layers, selectedLayerId, drawCanvas, isPlaying]);
-
-
-  // --- Canvas Interactions (Drag & Drop, Resize) ---
-  const getBBox = (layer) => {
-    const scaleMult = layer.scale / 100;
-    let w = 0, h = 0;
-    if (layer.type === 'text') {
-       const canvas = document.createElement('canvas');
-       const ctx = canvas.getContext('2d');
-       ctx.font = `bold ${layer.size * scaleMult}px "${layer.font}"`;
-       w = ctx.measureText(layer.text).width + 20; 
-       h = layer.size * scaleMult + 20;
-    } else if (layer.element) {
-       w = (layer.element.videoWidth || layer.element.width || 100) * scaleMult;
-       h = (layer.element.videoHeight || layer.element.height || 100) * scaleMult;
-    }
-    return { x: layer.x - w/2, y: layer.y - h/2, w, h };
-  };
-
-  const handleCanvasMouseDown = (e) => {
-    if (isPlaying || isExporting) return;
-    const rect = canvasRef.current.getBoundingClientRect();
-    const scaleX = canvasRef.current.width / rect.width;
-    const scaleY = canvasRef.current.height / rect.height;
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
-
-    // Check resize handle of selected layer first
-    const selLayer = layers.find(l => l.id === selectedLayerId);
-    if (selLayer) {
-      const bbox = getBBox(selLayer);
-      if (bbox.w > 0) {
-        const hx = bbox.x + bbox.w; const hy = bbox.y + bbox.h;
-        if (Math.hypot(x - hx, y - hy) < 20) {
-          canvasRef.current._dragMode = 'resize';
-          canvasRef.current._dragStart = { x, y };
-          canvasRef.current._origVal = selLayer.type === 'text' ? selLayer.size : selLayer.scale;
-          return;
-        }
-      }
-    }
-
-    // Check hit test (topmost first)
-    let hitId = null;
-    for (let i = 0; i < layers.length; i++) {
-      const l = layers[i];
-      if (currentTime >= l.startTime && currentTime <= l.startTime + l.duration) {
-        const bbox = getBBox(l);
-        if (bbox.w > 0 && x >= bbox.x && x <= bbox.x + bbox.w && y >= bbox.y && y <= bbox.y + bbox.h) {
-          hitId = l.id;
-          break; // Since we reversed array for drawing, actual DOM index 0 is top visually? Wait, we drew reverse.
-          // Correct hit test: iterate normal array (0 is top visually because we reversed before drawing? No, drawn reverse means index 0 is drawn last = top.)
-        }
-      }
-    }
-
-    setSelectedLayerId(hitId);
-    if (hitId) {
-      const l = layers.find(layer => layer.id === hitId);
-      canvasRef.current._dragMode = 'move';
-      canvasRef.current._dragStart = { x, y };
-      canvasRef.current._origPos = { x: l.x, y: l.y };
-    }
-  };
-
-  const handleCanvasMouseMove = (e) => {
-    const canvas = canvasRef.current;
-    if (!canvas || !canvas._dragMode || !selectedLayerId) return;
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
-
-    setLayers(prev => prev.map(l => {
-      if (l.id !== selectedLayerId) return l;
-      if (canvas._dragMode === 'move') {
-        return { ...l, x: canvas._origPos.x + (x - canvas._dragStart.x), y: canvas._origPos.y + (y - canvas._dragStart.y) };
-      } else if (canvas._dragMode === 'resize') {
-        const deltaX = x - canvas._dragStart.x;
-        if (l.type === 'text') return { ...l, size: Math.max(10, canvas._origVal + deltaX * 0.2) };
-        else return { ...l, scale: Math.max(10, canvas._origVal + deltaX * 0.2) };
-      }
-      return l;
-    }));
-  };
-
-  const handleCanvasMouseUp = () => {
-    if (canvasRef.current) canvasRef.current._dragMode = null;
-  };
-
-
-  // --- Actions & Media Handling ---
-  const addTextLayer = () => {
-    setLayers(prev => [createLayer('text', 'テキスト', { startTime: currentTime }), ...prev]);
-  };
-
-  const handleFileUpload = (e) => {
-    initAudio();
-    const file = e.target.files[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    
-    if (file.type.startsWith('image/')) {
-      const img = new Image();
-      img.onload = () => {
-        setLayers(prev => [createLayer('image', file.name, { startTime: currentTime, element: img }), ...prev]);
-      };
-      img.src = url;
-    } else if (file.type.startsWith('video/')) {
-      const vid = document.createElement('video');
-      vid.src = url; vid.crossOrigin = "anonymous";
-      vid.onloadedmetadata = () => {
-        // Connect to audio graph for export
-        const source = audioCtxRef.current.createMediaElementSource(vid);
-        source.connect(audioCtxRef.current.destination); // For local playback
-        source.connect(destNodeRef.current); // For recording
-        
-        const newLayer = createLayer('video', file.name, { startTime: currentTime, duration: vid.duration, element: vid });
-        setLayers(prev => [newLayer, ...prev]);
-        setDuration(d => Math.max(d, currentTime + vid.duration));
-      };
-    } else if (file.type.startsWith('audio/')) {
-      const aud = document.createElement('audio');
-      aud.src = url; aud.crossOrigin = "anonymous";
-      aud.onloadedmetadata = () => {
-        const source = audioCtxRef.current.createMediaElementSource(aud);
-        source.connect(audioCtxRef.current.destination);
-        source.connect(destNodeRef.current);
-        const newLayer = createLayer('audio', file.name, { startTime: currentTime, duration: aud.duration, element: aud });
-        setLayers(prev => [newLayer, ...prev]);
-        setDuration(d => Math.max(d, currentTime + aud.duration));
-      };
-    }
-    e.target.value = '';
-  };
-
-  const updateLayer = (id, updates) => {
-    setLayers(prev => prev.map(l => l.id === id ? { ...l, ...updates } : l));
-  };
-  const deleteLayer = (id) => {
-    setLayers(prev => prev.filter(l => l.id !== id));
-    if (selectedLayerId === id) setSelectedLayerId(null);
-  };
-
-
-  // --- VOICEVOX & AI TTS ---
-  const [ttsText, setTtsText] = useState('');
-  const [isGeneratingTTS, setIsGeneratingTTS] = useState(false);
-
-  const generateVoice = async () => {
-    if (!ttsText.trim()) return;
-    initAudio();
-    setIsGeneratingTTS(true);
-    let audioUrl = null;
-    let fallbackUsed = false;
-
-    try {
-      // 1. Try VOICEVOX local engine
-      const queryRes = await fetch(`http://127.0.0.1:50021/audio_query?text=${encodeURIComponent(ttsText)}&speaker=1`, { method: 'POST' });
-      if (queryRes.ok) {
-        const query = await queryRes.json();
-        const synthRes = await fetch(`http://127.0.0.1:50021/synthesis?speaker=1`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(query)
-        });
-        if (synthRes.ok) {
-          const blob = await synthRes.blob();
-          audioUrl = URL.createObjectURL(blob);
-        }
-      }
-    } catch (e) {
-      console.warn("VOICEVOX failed, using fallback Web Speech API");
-      fallbackUsed = true;
-    }
-
-    if (fallbackUsed) {
-      // Web Speech API Fallback (Can't easily convert to Blob, so we create a dummy audio and use utterance for playback)
-      // Note: This won't be captured in MediaRecorder export.
-      const utterance = new SpeechSynthesisUtterance(ttsText);
-      utterance.lang = 'ja-JP';
-      // Estimate duration roughly
-      const estDuration = Math.max(1, ttsText.length * 0.2); 
-      
-      // Add Text Layer
-      const textLayer = createLayer('text', '字幕', { text: ttsText, startTime: currentTime, duration: estDuration, y: 600, outlineWidth: 6 });
-      
-      // Dummy Audio Layer to trigger speech
-      const dummyAudio = document.createElement('audio'); 
-      const audioLayer = createLayer('audio', 'TTS (Fallback)', { startTime: currentTime, duration: estDuration, element: dummyAudio });
-      
-      // Hack: hook play event to trigger speech
-      dummyAudio.onplay = () => window.speechSynthesis.speak(utterance);
-      dummyAudio.onpause = () => window.speechSynthesis.cancel();
-
-      setLayers(prev => [textLayer, audioLayer, ...prev]);
-      setTtsText('');
-      setIsGeneratingTTS(false);
-      return;
-    }
-
-    if (audioUrl) {
-      const aud = document.createElement('audio');
-      aud.src = audioUrl; aud.crossOrigin = "anonymous";
-      aud.onloadedmetadata = () => {
-        const source = audioCtxRef.current.createMediaElementSource(aud);
-        source.connect(audioCtxRef.current.destination);
-        source.connect(destNodeRef.current);
-        
-        const audioLayer = createLayer('audio', 'ボイス', { startTime: currentTime, duration: aud.duration, element: aud });
-        const textLayer = createLayer('text', '字幕', { text: ttsText, startTime: currentTime, duration: aud.duration, y: 600, outlineWidth: 6 });
-        
-        setLayers(prev => [textLayer, audioLayer, ...prev]);
-        setDuration(d => Math.max(d, currentTime + aud.duration));
-        setTtsText('');
-        setIsGeneratingTTS(false);
-      };
-    } else {
-      setIsGeneratingTTS(false);
-    }
-  };
-
-
-  // --- Export ---
-  const handleExport = async () => {
-    if (layers.length === 0) return;
-    setIsExporting(true);
-    setIsPlaying(false);
-    layers.forEach(l => l.element && l.element.pause());
-
-    const canvasStream = canvasRef.current.captureStream(projectSettings.fps);
-    let finalStream = canvasStream;
-
-    // Merge audio if available
-    if (destNodeRef.current && destNodeRef.current.stream.getAudioTracks().length > 0) {
-      const audioTrack = destNodeRef.current.stream.getAudioTracks()[0];
-      finalStream = new MediaStream([...canvasStream.getVideoTracks(), audioTrack]);
-    }
-
-    let recorder;
-    const options = {
-      mimeType: 'video/webm; codecs=vp9',
-      videoBitsPerSecond: projectSettings.videoBitrate,
-      audioBitsPerSecond: projectSettings.audioBitrate
-    };
-
-    try {
-      recorder = new MediaRecorder(finalStream, options);
-    } catch(e) {
-      try {
-        recorder = new MediaRecorder(finalStream, { videoBitsPerSecond: projectSettings.videoBitrate, audioBitsPerSecond: projectSettings.audioBitrate });
-      } catch(e2) {
-        recorder = new MediaRecorder(finalStream);
-      }
-    }
-
-    const chunks = [];
-    recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-    
-    recorder.onstop = () => {
-      const blob = new Blob(chunks, { type: 'video/webm' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'export.webm';
-      a.click();
-      setIsExporting(false);
-    };
-
-    recorder.start();
-
-    // Offline rendering simulation
-    let expTime = 0;
-    const fps = projectSettings.fps;
-    const dt = 1/fps;
-    
-    let maxTime = 1;
-    layers.forEach(l => maxTime = Math.max(maxTime, l.startTime + l.duration));
-
-    const renderFrame = () => {
-      if (expTime > maxTime) {
-        recorder.stop();
-        return;
-      }
-      
-      setCurrentTime(expTime);
-      stateRef.current.currentTime = expTime; // Sync for drawCanvas
-      
-      // Sync media for recording
-      layers.forEach(l => {
-        if ((l.type === 'video' || l.type === 'audio') && l.element) {
-           if (expTime >= l.startTime && expTime <= l.startTime + l.duration) {
-             l.element.currentTime = (expTime - l.startTime) + l.trimStart;
-             if(l.element.paused) l.element.play().catch(()=>{});
-           } else {
-             if(!l.element.paused) l.element.pause();
-           }
-        }
-      });
-
-      drawCanvas();
-      expTime += dt;
-      setTimeout(renderFrame, 1000/fps);
-    };
-    renderFrame();
-  };
-
-  const selectedLayer = layers.find(l => l.id === selectedLayerId);
-
-  return (
-    <div className="flex flex-col h-screen bg-slate-900 text-slate-200 font-sans overflow-hidden select-none">
-      
-      {/* --- Top Bar --- */}
-      <header className="h-14 border-b border-slate-800 bg-slate-950 flex items-center justify-between px-4 shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="flex gap-1.5 mr-4"><div className="w-3 h-3 rounded-full bg-red-500"/><div className="w-3 h-3 rounded-full bg-yellow-500"/><div className="w-3 h-3 rounded-full bg-green-500"/></div>
-          <h1 className="font-bold tracking-wide flex items-center gap-2">
-            <span className="bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">YMM-Clone</span> 
-            <span className="text-xs bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700">Studio</span>
-          </h1>
-        </div>
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={() => setShowSettingsModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-sm text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
-          >
-            <Settings2 size={16}/> 設定 ({projectSettings.resolutionLabel})
-          </button>
-          <button 
-            onClick={handleExport} disabled={isExporting}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded text-sm font-medium transition-colors shadow ${isExporting ? 'bg-slate-700 text-slate-400' : 'bg-blue-600 hover:bg-blue-500 text-white'}`}
-          >
-            {isExporting ? <span className="animate-pulse">出力中...</span> : <><Download size={16}/> 動画を保存</>}
-          </button>
-        </div>
-      </header>
-
-      {/* --- Main Workspace --- */}
-      <div className="flex-1 flex overflow-hidden">
-        
-        {/* Left: Media / Tools */}
-        <aside className="w-64 border-r border-slate-800 bg-slate-900 flex flex-col">
-          <div className="p-3 border-b border-slate-800 font-semibold text-sm flex items-center gap-2 text-slate-300">
-            <Layers size={16}/> ツール & アセット
-          </div>
-          <div className="p-4 flex flex-col gap-4 overflow-y-auto">
+            // タイムライン・レイヤー状態
+            const [items, setItems] = useState([]);
+            const [selectedId, setSelectedId] = useState(null);
             
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={addTextLayer} className="flex flex-col items-center justify-center p-3 bg-slate-800 hover:bg-slate-700 rounded border border-slate-700 transition">
-                <Type size={20} className="mb-1 text-blue-400"/>
-                <span className="text-xs text-slate-300">テキスト</span>
-              </button>
-              <label className="flex flex-col items-center justify-center p-3 bg-slate-800 hover:bg-slate-700 rounded border border-slate-700 transition cursor-pointer">
-                <Upload size={20} className="mb-1 text-green-400"/>
-                <span className="text-xs text-slate-300">メディア</span>
-                <input type="file" accept="video/*,audio/*,image/*" className="hidden" onChange={handleFileUpload} />
-              </label>
-            </div>
+            // 再生状態
+            const [currentTime, setCurrentTime] = useState(0);
+            const [isPlaying, setIsPlaying] = useState(false);
+            const [playbackRate, setPlaybackRate] = useState(1.0);
+            const [duration, setDuration] = useState(30); // デフォルト30秒
 
-            <div className="mt-4 pt-4 border-t border-slate-800">
-              <h3 className="text-xs font-semibold text-slate-400 mb-3 flex items-center gap-1"><Mic size={14}/> AI ボイス (VOICEVOX)</h3>
-              <textarea 
-                value={ttsText} onChange={e => setTtsText(e.target.value)}
-                placeholder="喋らせたいテキストを入力"
-                className="w-full h-24 bg-slate-950 border border-slate-700 rounded p-2 text-sm focus:border-blue-500 outline-none resize-none"
-              />
-              <button 
-                onClick={generateVoice} disabled={!ttsText || isGeneratingTTS}
-                className="w-full mt-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm py-2 rounded flex items-center justify-center gap-2 transition"
-              >
-                {isGeneratingTTS ? '生成中...' : '音声・字幕を生成'}
-              </button>
-              <p className="text-[10px] text-slate-500 mt-2">※ローカルでVOICEVOX起動中のみフル機能。未起動時はブラウザ読上げ(録画不可)になります。</p>
-            </div>
+            // AI音声
+            const [aiText, setAiText] = useState("");
 
-          </div>
-        </aside>
+            const canvasRef = useRef(null);
+            const animationRef = useRef(null);
+            const lastTimeRef = useRef(performance.now());
+            const mediaRecorderRef = useRef(null);
+            const [isRecording, setIsRecording] = useState(false);
 
-        {/* Center: Canvas Preview */}
-        <main className="flex-1 flex flex-col relative bg-slate-950">
-          <div className="flex-1 p-6 flex items-center justify-center overflow-hidden">
-            <canvas 
-              ref={canvasRef}
-              width={projectSettings.width} height={projectSettings.height}
-              onMouseDown={handleCanvasMouseDown}
-              onMouseMove={handleCanvasMouseMove}
-              onMouseUp={handleCanvasMouseUp}
-              onMouseLeave={handleCanvasMouseUp}
-              className="max-w-full max-h-full object-contain bg-black shadow-2xl ring-1 ring-slate-800 cursor-crosshair"
-              style={{ aspectRatio: `${projectSettings.width}/${projectSettings.height}` }}
-            />
-          </div>
-          
-          {/* Playback Controls */}
-          <div className="h-12 bg-slate-900 border-t border-slate-800 flex items-center justify-center gap-4 shrink-0">
-             <div className="flex gap-2">
-                <button onClick={() => { setIsPlaying(p=>!p); if(currentTime>=duration) setCurrentTime(0); initAudio(); }} className="w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded-full text-slate-200">
-                  {isPlaying ? <Pause size={16}/> : <Play size={16} className="ml-0.5"/>}
-                </button>
-                <button onClick={() => { setIsPlaying(false); setCurrentTime(0); }} className="w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded-full text-slate-200">
-                  <Square size={14}/>
-                </button>
-             </div>
-             <div className="text-sm font-mono w-24 text-center">{formatTime(currentTime)}</div>
-             <select 
-               value={playbackRate} onChange={e => setPlaybackRate(parseFloat(e.target.value))}
-               className="bg-slate-950 border border-slate-700 text-xs rounded px-2 py-1 outline-none"
-             >
-               <option value={0.5}>0.5x</option>
-               <option value={1}>1.0x</option>
-               <option value={1.5}>1.5x</option>
-               <option value={2}>2.0x</option>
-             </select>
-          </div>
-        </main>
+            // キャンバス操作用
+            const [isDragging, setIsDragging] = useState(false);
+            const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
-        {/* Right: Properties Inspector */}
-        <aside className="w-72 border-l border-slate-800 bg-slate-900 flex flex-col">
-          <div className="p-3 border-b border-slate-800 font-semibold text-sm flex items-center justify-between text-slate-300">
-            <div className="flex items-center gap-2"><Settings size={16}/> プロパティ</div>
-            {selectedLayer && (
-              <button onClick={() => deleteLayer(selectedLayer.id)} className="text-slate-500 hover:text-red-400" title="削除">
-                <Trash2 size={16}/>
-              </button>
-            )}
-          </div>
-          
-          <div className="flex-1 overflow-y-auto p-4 space-y-6">
-            {!selectedLayer ? (
-              <div className="text-center text-slate-500 text-sm mt-10">レイヤーを選択してください</div>
-            ) : (
-              <>
-                {/* Transform */}
-                <div>
-                  <h3 className="text-xs font-semibold text-slate-500 mb-3 flex items-center gap-1"><Move size={14}/> トランスフォーム</h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">X位置</label>
-                      <input type="number" value={Math.round(selectedLayer.x)} onChange={e => updateLayer(selectedLayer.id, {x: parseFloat(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-sm outline-none" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">Y位置</label>
-                      <input type="number" value={Math.round(selectedLayer.y)} onChange={e => updateLayer(selectedLayer.id, {y: parseFloat(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-sm outline-none" />
-                    </div>
-                  </div>
-                  {selectedLayer.type !== 'text' && selectedLayer.type !== 'audio' && (
-                    <div className="mt-3">
-                       <label className="text-[10px] text-slate-400 block mb-1">スケール (%)</label>
-                       <input type="range" min="10" max="300" value={selectedLayer.scale} onChange={e => updateLayer(selectedLayer.id, {scale: parseFloat(e.target.value)})} className="w-full accent-blue-500" />
-                    </div>
-                  )}
-                </div>
+            // ----------------------------------------------------
+            // キャンバス描画ループ
+            // ----------------------------------------------------
+            const renderCanvas = useCallback((timeNow) => {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                
+                // 背景クリア
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(0, 0, settings.width, settings.height);
 
-                {/* Text Specific */}
-                {selectedLayer.type === 'text' && (
-                  <div className="border-t border-slate-800 pt-4">
-                    <h3 className="text-xs font-semibold text-slate-500 mb-3 flex items-center gap-1"><Type size={14}/> テキスト設定</h3>
-                    <textarea 
-                      value={selectedLayer.text} onChange={e => updateLayer(selectedLayer.id, {text: e.target.value})}
-                      className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm outline-none resize-y mb-3" rows={2}
-                    />
-                    <div className="grid grid-cols-2 gap-3 mb-3">
-                      <div>
-                        <label className="text-[10px] text-slate-400 block mb-1">フォント</label>
-                        <select value={selectedLayer.font} onChange={e => updateLayer(selectedLayer.id, {font: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-sm outline-none">
-                          <option value="sans-serif">ゴシック</option>
-                          <option value="serif">明朝</option>
-                          <option value="Impact">Impact</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-slate-400 block mb-1">サイズ</label>
-                        <input type="number" value={selectedLayer.size} onChange={e => updateLayer(selectedLayer.id, {size: parseInt(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-sm outline-none" />
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div>
-                        <label className="text-[10px] text-slate-400 block mb-1">文字色</label>
-                        <input type="color" value={selectedLayer.color} onChange={e => updateLayer(selectedLayer.id, {color: e.target.value})} className="w-8 h-8 rounded border-0 cursor-pointer bg-transparent p-0" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-slate-400 block mb-1">縁取り色</label>
-                        <input type="color" value={selectedLayer.outlineColor} onChange={e => updateLayer(selectedLayer.id, {outlineColor: e.target.value})} className="w-8 h-8 rounded border-0 cursor-pointer bg-transparent p-0" />
-                      </div>
-                      <div className="flex-1">
-                        <label className="text-[10px] text-slate-400 block mb-1">縁取り幅</label>
-                        <input type="number" min="0" value={selectedLayer.outlineWidth} onChange={e => updateLayer(selectedLayer.id, {outlineWidth: parseInt(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-sm outline-none" />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Animation */}
-                {selectedLayer.type !== 'audio' && (
-                  <div className="border-t border-slate-800 pt-4">
-                    <h3 className="text-xs font-semibold text-slate-500 mb-3 flex items-center gap-1"><Maximize size={14}/> アニメーション</h3>
-                    <div className="space-y-3">
-                      <div>
-                        <label className="text-[10px] text-slate-400 block mb-1">登場 (In)</label>
-                        <select value={selectedLayer.animIn} onChange={e => updateLayer(selectedLayer.id, {animIn: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-sm outline-none">
-                          <option value="none">なし</option>
-                          <option value="fade">フェード</option>
-                          <option value="slide-left">スライド (右へ)</option>
-                          <option value="slide-right">スライド (左へ)</option>
-                          <option value="slide-top">スライド (下へ)</option>
-                          <option value="slide-bottom">スライド (上へ)</option>
-                          <option value="zoom-in">ズームイン</option>
-                          <option value="spin">スピン</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-slate-400 block mb-1">退場 (Out)</label>
-                        <select value={selectedLayer.animOut} onChange={e => updateLayer(selectedLayer.id, {animOut: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-sm outline-none">
-                          <option value="none">なし</option>
-                          <option value="fade">フェード</option>
-                          <option value="slide-left">スライド (左へ)</option>
-                          <option value="slide-right">スライド (右へ)</option>
-                          <option value="slide-top">スライド (上へ)</option>
-                          <option value="slide-bottom">スライド (下へ)</option>
-                          <option value="zoom-out">ズームアウト</option>
-                          <option value="spin">スピン</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-slate-400 block mb-1">時間 (秒)</label>
-                        <input type="number" step="0.1" min="0.1" value={selectedLayer.animDuration} onChange={e => updateLayer(selectedLayer.id, {animDuration: parseFloat(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-sm outline-none" />
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </aside>
-      </div>
-
-      {/* --- Timeline (Bottom) --- */}
-      <footer className="h-64 border-t border-slate-800 bg-slate-900 flex flex-col shrink-0">
-        <div className="flex flex-1 overflow-hidden relative">
-          
-          {/* Layer Headers */}
-          <div className="w-48 bg-slate-950 border-r border-slate-800 flex flex-col overflow-y-auto pt-6 z-10 shadow-md">
-            {[...layers].reverse().map(l => (
-              <div 
-                key={l.id} 
-                onClick={() => setSelectedLayerId(l.id)}
-                className={`h-10 px-3 flex items-center gap-2 border-b border-slate-800 text-xs cursor-pointer truncate ${selectedLayerId === l.id ? 'bg-slate-800 text-blue-400 border-l-2 border-l-blue-500' : 'text-slate-400 hover:bg-slate-900'}`}
-              >
-                {l.type === 'text' && <Type size={14}/>}
-                {l.type === 'video' && <Video size={14}/>}
-                {l.type === 'image' && <ImageIcon size={14}/>}
-                {l.type === 'audio' && <Music size={14}/>}
-                <span className="truncate">{l.name}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Timeline Tracks */}
-          <div className="flex-1 overflow-auto bg-slate-900 relative timeline-container">
-            <TimelineRuler 
-              duration={duration} 
-              currentTime={currentTime} 
-              onSeek={(t) => { setCurrentTime(t); if(isPlaying) setIsPlaying(false); }} 
-            />
-            
-            <div className="relative mt-6" style={{ width: `${Math.max(duration * 100, 1000)}px`, minHeight: '100%' }}>
-              
-              {/* Playhead */}
-              <div 
-                className="absolute top-0 bottom-0 w-[1px] bg-red-500 z-30 pointer-events-none"
-                style={{ left: `${currentTime * 100}px` }}
-              >
-                <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-red-500 absolute -top-1 -left-[5px]"/>
-              </div>
-
-              {/* Tracks */}
-              {[...layers].reverse().map(l => (
-                <TimelineClip 
-                  key={l.id} 
-                  layer={l} 
-                  isSelected={selectedLayerId === l.id}
-                  onSelect={() => setSelectedLayerId(l.id)}
-                  onChange={(updates) => updateLayer(l.id, updates)}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      </footer>
-
-      {/* --- Settings Modal --- */}
-      {showSettingsModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-slate-900 border border-slate-700 rounded-lg shadow-xl w-full max-w-md overflow-hidden">
-            <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950">
-              <h2 className="text-sm font-bold flex items-center gap-2"><Settings2 size={18}/> プロジェクト・書き出し設定</h2>
-              <button onClick={() => setShowSettingsModal(false)} className="text-slate-400 hover:text-white"><X size={18}/></button>
-            </div>
-            <div className="p-6 space-y-5">
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-2">解像度プリセット</label>
-                <select 
-                  value={projectSettings.resolutionLabel}
-                  onChange={(e) => {
-                    const label = e.target.value;
-                    if (label === 'custom') {
-                      setProjectSettings(prev => ({ ...prev, resolutionLabel: 'custom' }));
-                    } else {
-                      const res = RESOLUTIONS[label];
-                      setProjectSettings(prev => ({
-                        ...prev,
-                        resolutionLabel: label,
-                        width: res.width, height: res.height,
-                        videoBitrate: res.defaultVideoBitrate,
-                        audioBitrate: res.defaultAudioBitrate
-                      }));
+                // アイテム描画
+                const activeItems = items.filter(it => currentTime >= it.start && currentTime <= it.start + it.duration);
+                
+                // Zインデックス(レイヤー)順にソートして描画
+                activeItems.sort((a, b) => a.layer - b.layer).forEach(item => {
+                    ctx.save();
+                    
+                    // アニメーション(フェードイン例)
+                    if (item.animation === "fade" && currentTime - item.start < 1) {
+                        ctx.globalAlpha = currentTime - item.start;
                     }
-                  }}
-                  className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm outline-none focus:border-blue-500"
-                >
-                  {Object.keys(RESOLUTIONS).map(k => <option key={k} value={k}>{k} ({RESOLUTIONS[k].width}x{RESOLUTIONS[k].height})</option>)}
-                  <option value="custom">カスタム</option>
-                </select>
-              </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[11px] text-slate-500 mb-1">幅 (px)</label>
-                  <input type="number" disabled={projectSettings.resolutionLabel !== 'custom'} value={projectSettings.width} onChange={e => setProjectSettings(p => ({...p, width: parseInt(e.target.value)}))} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm outline-none disabled:opacity-50" />
+                    if (item.type === 'text') {
+                        ctx.font = `${item.fontSize}px ${item.fontFamily || 'sans-serif'}`;
+                        ctx.fillStyle = item.color;
+                        ctx.textBaseline = 'top';
+                        // 縁取り
+                        ctx.strokeStyle = '#000';
+                        ctx.lineWidth = item.fontSize * 0.1;
+                        ctx.strokeText(item.text, item.x, item.y);
+                        ctx.fillText(item.text, item.x, item.y);
+
+                        // 選択中の枠線
+                        if (item.id === selectedId) {
+                            const metrics = ctx.measureText(item.text);
+                            ctx.strokeStyle = '#3b82f6'; // Blue
+                            ctx.lineWidth = 2;
+                            ctx.strokeRect(item.x - 5, item.y - 5, metrics.width + 10, item.fontSize + 10);
+                        }
+                    } else if (item.type === 'image' || item.type === 'video') {
+                        if (item.element) {
+                            // 動画の同期
+                            if (item.type === 'video') {
+                                const videoTime = (currentTime - item.start) + (item.offset || 0);
+                                // 誤差が大きければシーク
+                                if (Math.abs(item.element.currentTime - videoTime) > 0.1) {
+                                    item.element.currentTime = videoTime;
+                                }
+                                if (isPlaying && item.element.paused) item.element.play();
+                                else if (!isPlaying && !item.element.paused) item.element.pause();
+                            }
+                            
+                            ctx.drawImage(item.element, item.x, item.y, item.width, item.height);
+                            
+                            if (item.id === selectedId) {
+                                ctx.strokeStyle = '#3b82f6';
+                                ctx.lineWidth = 4;
+                                ctx.strokeRect(item.x, item.y, item.width, item.height);
+                            }
+                        }
+                    }
+                    ctx.restore();
+                });
+            }, [items, currentTime, settings, selectedId, isPlaying]);
+
+            // ループ処理
+            useEffect(() => {
+                const loop = (now) => {
+                    const delta = (now - lastTimeRef.current) / 1000;
+                    lastTimeRef.current = now;
+
+                    if (isPlaying) {
+                        setCurrentTime(prev => {
+                            const next = prev + delta * playbackRate;
+                            if (next >= duration) {
+                                setIsPlaying(false);
+                                return duration;
+                            }
+                            return next;
+                        });
+                    }
+                    renderCanvas(now);
+                    animationRef.current = requestAnimationFrame(loop);
+                };
+                animationRef.current = requestAnimationFrame(loop);
+                return () => cancelAnimationFrame(animationRef.current);
+            }, [isPlaying, playbackRate, duration, renderCanvas]);
+
+
+            // ----------------------------------------------------
+            // キャンバス上の直接操作（ドラッグ＆ドロップ）
+            // ----------------------------------------------------
+            const handleCanvasMouseDown = (e) => {
+                const canvas = canvasRef.current;
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = settings.width / rect.width;
+                const scaleY = settings.height / rect.height;
+                const clickX = (e.clientX - rect.left) * scaleX;
+                const clickY = (e.clientY - rect.top) * scaleY;
+
+                // クリック位置にあるアイテムを探す（前面=配列の後ろ から）
+                const activeItems = items.filter(it => currentTime >= it.start && currentTime <= it.start + it.duration);
+                let clickedItem = null;
+                
+                for (let i = activeItems.length - 1; i >= 0; i--) {
+                    const item = activeItems[i];
+                    let isHit = false;
+                    if (item.type === 'text') {
+                        const ctx = canvas.getContext('2d');
+                        ctx.font = `${item.fontSize}px sans-serif`;
+                        const metrics = ctx.measureText(item.text);
+                        isHit = (clickX >= item.x && clickX <= item.x + metrics.width &&
+                                 clickY >= item.y && clickY <= item.y + item.fontSize);
+                    } else if (item.type === 'image' || item.type === 'video') {
+                        isHit = (clickX >= item.x && clickX <= item.x + item.width &&
+                                 clickY >= item.y && clickY <= item.y + item.height);
+                    }
+                    
+                    if (isHit) {
+                        clickedItem = item;
+                        break;
+                    }
+                }
+
+                if (clickedItem) {
+                    setSelectedId(clickedItem.id);
+                    setIsDragging(true);
+                    setDragOffset({ x: clickX - clickedItem.x, y: clickY - clickedItem.y });
+                } else {
+                    setSelectedId(null);
+                }
+            };
+
+            const handleCanvasMouseMove = (e) => {
+                if (!isDragging || !selectedId) return;
+                const canvas = canvasRef.current;
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = settings.width / rect.width;
+                const scaleY = settings.height / rect.height;
+                const mouseX = (e.clientX - rect.left) * scaleX;
+                const mouseY = (e.clientY - rect.top) * scaleY;
+
+                setItems(prev => prev.map(item => 
+                    item.id === selectedId 
+                    ? { ...item, x: mouseX - dragOffset.x, y: mouseY - dragOffset.y } 
+                    : item
+                ));
+            };
+
+            const handleCanvasMouseUp = () => setIsDragging(false);
+
+            // ----------------------------------------------------
+            // メディア追加機能
+            // ----------------------------------------------------
+            const handleFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const url = URL.createObjectURL(file);
+                const isVideo = file.type.startsWith('video');
+
+                const newItem = {
+                    id: Date.now().toString(),
+                    type: isVideo ? 'video' : 'image',
+                    name: file.name,
+                    src: url,
+                    start: currentTime,
+                    duration: 5,
+                    layer: 1,
+                    x: settings.width / 4,
+                    y: settings.height / 4,
+                    width: settings.width / 2,
+                    height: settings.height / 2,
+                    animation: "none"
+                };
+
+                if (isVideo) {
+                    const video = document.createElement('video');
+                    video.src = url;
+                    video.muted = true; // キャンバス描画用
+                    video.onloadedmetadata = () => {
+                        newItem.duration = video.duration;
+                        newItem.element = video;
+                        setItems(prev => [...prev, newItem]);
+                    };
+                } else {
+                    const img = new Image();
+                    img.src = url;
+                    img.onload = () => {
+                        newItem.element = img;
+                        setItems(prev => [...prev, newItem]);
+                    };
+                }
+            };
+
+            const addText = () => {
+                setItems(prev => [...prev, {
+                    id: Date.now().toString(),
+                    type: 'text',
+                    name: '新規テキスト',
+                    text: 'テキストを入力',
+                    start: currentTime,
+                    duration: 5,
+                    layer: 2,
+                    x: settings.width / 2 - 100,
+                    y: settings.height / 2,
+                    fontSize: 60,
+                    color: '#ffffff',
+                    fontFamily: 'sans-serif',
+                    animation: "none"
+                }]);
+            };
+
+            // ----------------------------------------------------
+            // AI音声生成 (VOICEVOX フォールバック: Web Speech API)
+            // ----------------------------------------------------
+            const generateAIVoice = async () => {
+                if (!aiText.trim()) return;
+                
+                try {
+                    // VOICEVOXローカルホストへのリクエスト試行
+                    const queryRes = await fetch(`http://127.0.0.1:50021/audio_query?text=${encodeURIComponent(aiText)}&speaker=1`, { method: 'POST' });
+                    const queryJson = await queryRes.json();
+                    const synthRes = await fetch(`http://127.0.0.1:50021/synthesis?speaker=1`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(queryJson)
+                    });
+                    const blob = await synthRes.blob();
+                    const url = URL.createObjectURL(blob);
+                    
+                    const audio = new Audio(url);
+                    audio.onloadedmetadata = () => {
+                        // 音声アイテム追加
+                        setItems(prev => [...prev, {
+                            id: Date.now().toString() + "a",
+                            type: 'audio',
+                            name: 'AI音声',
+                            src: url,
+                            element: audio,
+                            start: currentTime,
+                            duration: audio.duration,
+                            layer: 0
+                        }]);
+                    };
+                } catch (e) {
+                    console.warn("VOICEVOX未起動。Web Speech APIを使用します。");
+                    // ブラウザ標準の読み上げ機能
+                    const utterance = new SpeechSynthesisUtterance(aiText);
+                    utterance.lang = 'ja-JP';
+                    window.speechSynthesis.speak(utterance);
+                    // ダミー持続時間を設定（正確には取得できないため推定）
+                    const estimatedDuration = aiText.length * 0.2; 
+                    setItems(prev => [...prev, {
+                        id: Date.now().toString() + "a",
+                        type: 'audio',
+                        name: 'AI音声(ブラウザ)',
+                        start: currentTime,
+                        duration: estimatedDuration,
+                        layer: 0
+                    }]);
+                }
+
+                // 同時に字幕テキストを配置
+                setItems(prev => [...prev, {
+                    id: Date.now().toString() + "t",
+                    type: 'text',
+                    name: '字幕',
+                    text: aiText,
+                    start: currentTime,
+                    duration: aiText.length * 0.2 || 2, // 目安
+                    layer: 3,
+                    x: settings.width / 2 - (aiText.length * 15),
+                    y: settings.height - 100,
+                    fontSize: 50,
+                    color: '#ffffff',
+                    fontFamily: 'sans-serif',
+                    animation: "fade"
+                }]);
+                setAiText("");
+            };
+
+            // ----------------------------------------------------
+            // エクスポート (MediaRecorder API)
+            // ----------------------------------------------------
+            const exportVideo = () => {
+                if (!canvasRef.current) return;
+                setIsRecording(true);
+                setCurrentTime(0);
+                setIsPlaying(true);
+
+                const stream = canvasRef.current.captureStream(settings.fps);
+                // ※音声ストリームの合成処理（AudioContext等）は複雑化するため本コードでは映像のみを記録
+                
+                const recorder = new MediaRecorder(stream, {
+                    mimeType: 'video/webm; codecs=vp9',
+                    videoBitsPerSecond: settings.vBitrate
+                });
+                
+                const chunks = [];
+                recorder.ondataavailable = e => chunks.push(e.data);
+                recorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `export_${settings.res}.webm`;
+                    a.click();
+                    setIsRecording(false);
+                    setIsPlaying(false);
+                };
+                
+                recorder.start();
+                mediaRecorderRef.current = recorder;
+
+                // duration到達でストップする監視タイマー
+                const checkEnd = setInterval(() => {
+                    setCurrentTime(curr => {
+                        if (curr >= duration - 0.1) {
+                            recorder.stop();
+                            clearInterval(checkEnd);
+                        }
+                        return curr;
+                    });
+                }, 500);
+            };
+
+            const selectedItem = items.find(it => it.id === selectedId);
+
+            return (
+                <div className="flex flex-col h-full bg-gray-900 font-sans">
+                    {/* ヘッダーバー */}
+                    <div className="bg-gray-800 p-2 flex justify-between items-center border-b border-gray-700 shadow-sm">
+                        <div className="flex items-center space-x-4">
+                            <h1 className="text-lg font-bold text-blue-400"><i className="fa-solid fa-clapperboard mr-2"></i>Web Video Editor</h1>
+                            <div className="flex space-x-2">
+                                <label className="cursor-pointer bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-sm transition">
+                                    <i className="fa-solid fa-file-import mr-1"></i> メディア
+                                    <input type="file" className="hidden" accept="image/*,video/*" onChange={handleFileUpload} />
+                                </label>
+                                <button onClick={addText} className="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-sm transition">
+                                    <i className="fa-solid fa-font mr-1"></i> テキスト
+                                </button>
+                                <button onClick={() => setIsSettingsOpen(true)} className="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-sm transition">
+                                    <i className="fa-solid fa-gear mr-1"></i> 設定
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <button onClick={exportVideo} disabled={isRecording} className={`px-4 py-1.5 rounded font-bold transition ${isRecording ? 'bg-red-600 animate-pulse' : 'bg-blue-600 hover:bg-blue-500'}`}>
+                                {isRecording ? '録画中...' : '動画書き出し'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* メインワークスペース */}
+                    <div className="flex flex-1 overflow-hidden">
+                        
+                        {/* 左/中央：プレビュー画面 */}
+                        <div className="flex-1 flex flex-col p-4 bg-gray-950 relative">
+                            {/* AI音声パネル */}
+                            <div className="absolute top-6 left-6 z-10 bg-gray-800/80 p-3 rounded-lg backdrop-blur shadow-lg w-80">
+                                <h3 className="text-sm font-bold mb-2 text-gray-300"><i className="fa-solid fa-robot mr-1"></i> AI音声・自動字幕追加</h3>
+                                <div className="flex space-x-2">
+                                    <input 
+                                        type="text" 
+                                        value={aiText} 
+                                        onChange={(e) => setAiText(e.target.value)} 
+                                        placeholder="喋らせる内容を入力..." 
+                                        className="flex-1 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-500"
+                                    />
+                                    <button onClick={generateAIVoice} className="bg-green-600 hover:bg-green-500 px-3 py-1 rounded text-sm transition">追加</button>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-2">※ローカルでVOICEVOX起動中なら連携します</p>
+                            </div>
+
+                            {/* キャンバス */}
+                            <div className="canvas-container rounded-lg border border-gray-700">
+                                <canvas
+                                    ref={canvasRef}
+                                    width={settings.width}
+                                    height={settings.height}
+                                    onMouseDown={handleCanvasMouseDown}
+                                    onMouseMove={handleCanvasMouseMove}
+                                    onMouseUp={handleCanvasMouseUp}
+                                    onMouseLeave={handleCanvasMouseUp}
+                                ></canvas>
+                            </div>
+
+                            {/* コントローラー */}
+                            <div className="mt-4 flex items-center justify-center space-x-6 bg-gray-800 p-2 rounded-full w-max mx-auto shadow-lg border border-gray-700">
+                                <span className="text-sm font-mono w-16 text-center">{currentTime.toFixed(2)}s</span>
+                                <button onClick={() => setCurrentTime(0)} className="hover:text-blue-400 transition"><i className="fa-solid fa-backward-step"></i></button>
+                                <button onClick={() => setIsPlaying(!isPlaying)} className="w-10 h-10 bg-blue-600 hover:bg-blue-500 rounded-full flex items-center justify-center text-xl transition shadow">
+                                    <i className={`fa-solid ${isPlaying ? 'fa-pause' : 'fa-play'}`}></i>
+                                </button>
+                                <button onClick={() => setIsPlaying(false)} className="hover:text-red-400 transition"><i className="fa-solid fa-stop"></i></button>
+                                
+                                <div className="flex items-center space-x-2 text-sm border-l border-gray-600 pl-4">
+                                    <span>速度:</span>
+                                    <select value={playbackRate} onChange={(e) => setPlaybackRate(Number(e.target.value))} className="bg-gray-700 rounded p-1 outline-none">
+                                        <option value="0.25">0.25x</option>
+                                        <option value="0.5">0.5x</option>
+                                        <option value="1">1.0x</option>
+                                        <option value="1.5">1.5x</option>
+                                        <option value="2">2.0x</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 右：プロパティ（インスペクタ）パネル */}
+                        <div className="w-80 bg-gray-800 border-l border-gray-700 flex flex-col">
+                            <div className="p-3 bg-gray-900 border-b border-gray-700 font-bold text-sm">
+                                設定 / プロパティ
+                            </div>
+                            <div className="p-4 flex-1 overflow-y-auto space-y-4 text-sm">
+                                {selectedItem ? (
+                                    <>
+                                        <div>
+                                            <label className="block text-gray-400 mb-1">X位置</label>
+                                            <input type="number" value={Math.round(selectedItem.x || 0)} 
+                                                onChange={(e) => setItems(items.map(it => it.id === selectedId ? {...it, x: Number(e.target.value)} : it))}
+                                                className="w-full bg-gray-900 border border-gray-700 rounded p-1.5 focus:border-blue-500 outline-none"/>
+                                        </div>
+                                        <div>
+                                            <label className="block text-gray-400 mb-1">Y位置</label>
+                                            <input type="number" value={Math.round(selectedItem.y || 0)} 
+                                                onChange={(e) => setItems(items.map(it => it.id === selectedId ? {...it, y: Number(e.target.value)} : it))}
+                                                className="w-full bg-gray-900 border border-gray-700 rounded p-1.5 focus:border-blue-500 outline-none"/>
+                                        </div>
+                                        
+                                        {selectedItem.type === 'text' && (
+                                            <>
+                                                <div>
+                                                    <label className="block text-gray-400 mb-1">テキスト内容</label>
+                                                    <textarea value={selectedItem.text} 
+                                                        onChange={(e) => setItems(items.map(it => it.id === selectedId ? {...it, text: e.target.value} : it))}
+                                                        className="w-full bg-gray-900 border border-gray-700 rounded p-1.5 h-20 focus:border-blue-500 outline-none"></textarea>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-gray-400 mb-1">フォントサイズ</label>
+                                                    <input type="range" min="10" max="200" value={selectedItem.fontSize} 
+                                                        onChange={(e) => setItems(items.map(it => it.id === selectedId ? {...it, fontSize: Number(e.target.value)} : it))}
+                                                        className="w-full accent-blue-500"/>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-gray-400 mb-1">文字色</label>
+                                                    <input type="color" value={selectedItem.color} 
+                                                        onChange={(e) => setItems(items.map(it => it.id === selectedId ? {...it, color: e.target.value} : it))}
+                                                        className="w-full h-8 cursor-pointer rounded bg-transparent border-0"/>
+                                                </div>
+                                            </>
+                                        )}
+                                        
+                                        {['image', 'video'].includes(selectedItem.type) && (
+                                            <>
+                                                <div>
+                                                    <label className="block text-gray-400 mb-1">幅 (Width)</label>
+                                                    <input type="number" value={Math.round(selectedItem.width)} 
+                                                        onChange={(e) => setItems(items.map(it => it.id === selectedId ? {...it, width: Number(e.target.value)} : it))}
+                                                        className="w-full bg-gray-900 border border-gray-700 rounded p-1.5 focus:border-blue-500 outline-none"/>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-gray-400 mb-1">高さ (Height)</label>
+                                                    <input type="number" value={Math.round(selectedItem.height)} 
+                                                        onChange={(e) => setItems(items.map(it => it.id === selectedId ? {...it, height: Number(e.target.value)} : it))}
+                                                        className="w-full bg-gray-900 border border-gray-700 rounded p-1.5 focus:border-blue-500 outline-none"/>
+                                                </div>
+                                            </>
+                                        )}
+
+                                        <div>
+                                            <label className="block text-gray-400 mb-1">アニメーション</label>
+                                            <select value={selectedItem.animation || "none"} 
+                                                onChange={(e) => setItems(items.map(it => it.id === selectedId ? {...it, animation: e.target.value} : it))}
+                                                className="w-full bg-gray-900 border border-gray-700 rounded p-1.5 focus:border-blue-500 outline-none">
+                                                <option value="none">なし</option>
+                                                <option value="fade">フェードイン</option>
+                                            </select>
+                                        </div>
+
+                                        <button onClick={() => {
+                                            setItems(items.filter(it => it.id !== selectedId));
+                                            setSelectedId(null);
+                                        }} className="w-full bg-red-600 hover:bg-red-500 py-2 rounded mt-4 transition">
+                                            <i className="fa-solid fa-trash mr-1"></i> 削除
+                                        </button>
+                                    </>
+                                ) : (
+                                    <div className="text-gray-500 text-center mt-10">
+                                        アイテムを選択してください<br/>
+                                        (キャンバス上 または タイムライン)
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 下部：タイムライン */}
+                    <div className="h-64 bg-gray-800 border-t border-gray-700 flex flex-col select-none">
+                        <div className="flex bg-gray-900 border-b border-gray-700 px-4 py-1 text-xs text-gray-400 items-center justify-between">
+                            <span>タイムライン</span>
+                            <div className="flex items-center space-x-2">
+                                <span>全長:</span>
+                                <input type="number" value={duration} onChange={e => setDuration(Number(e.target.value))} className="w-16 bg-gray-700 text-white rounded px-1 outline-none"/>
+                                <span>秒</span>
+                            </div>
+                        </div>
+                        
+                        <div className="flex-1 overflow-auto relative p-2" 
+                             onMouseDown={(e) => {
+                                 // タイムラインクリックでシーク
+                                 if (e.target === e.currentTarget) {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    const clickX = e.clientX - rect.left;
+                                    const newTime = (clickX / 2000) * duration; // 2000px をタイムライン全幅と仮定
+                                    setCurrentTime(Math.max(0, Math.min(newTime, duration)));
+                                 }
+                             }}>
+                            
+                            <div className="relative" style={{ width: '2000px', height: '100%' }}>
+                                {/* ルーラー (目盛り) */}
+                                <div className="h-6 border-b border-gray-700 mb-2 relative pointer-events-none">
+                                    {[...Array(Math.ceil(duration) + 1)].map((_, i) => (
+                                        <div key={i} className="absolute text-[10px] text-gray-500 border-l border-gray-600 pl-1" style={{ left: `${(i / duration) * 100}%` }}>
+                                            {i}s
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* レイヤー表示 */}
+                                {[0, 1, 2, 3].map(layerNum => (
+                                    <div key={layerNum} className="h-10 bg-gray-900/50 mb-1 rounded relative border border-gray-700/50">
+                                        <div className="absolute left-0 top-0 bottom-0 w-16 bg-gray-900 border-r border-gray-700 flex items-center justify-center text-xs text-gray-500 z-10 pointer-events-none">
+                                            Layer {layerNum}
+                                        </div>
+                                        {items.filter(it => it.layer === layerNum).map(item => (
+                                            <div key={item.id} 
+                                                 onMouseDown={(e) => { e.stopPropagation(); setSelectedId(item.id); }}
+                                                 className={`absolute top-1 bottom-1 rounded border overflow-hidden cursor-pointer text-xs px-2 flex items-center shadow ${
+                                                     item.id === selectedId ? 'bg-blue-600 border-blue-400' : 
+                                                     item.type === 'text' ? 'bg-green-700 border-green-500' :
+                                                     item.type === 'audio' ? 'bg-purple-700 border-purple-500' :
+                                                     'bg-orange-700 border-orange-500'
+                                                 }`}
+                                                 style={{
+                                                     left: `calc(4rem + ${(item.start / duration) * 100}%)`,
+                                                     width: `${(item.duration / duration) * 100}%`
+                                                 }}>
+                                                 <span className="truncate">{item.name || item.text}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ))}
+
+                                {/* 再生ヘッド（赤い線） */}
+                                <div className="absolute top-0 bottom-0 w-[2px] bg-red-500 pointer-events-none z-20"
+                                     style={{ left: `calc(4rem + ${(currentTime / duration) * 100}%)` }}>
+                                     <div className="absolute -top-2 -ml-[5px] w-0 h-0 border-l-[6px] border-r-[6px] border-t-[8px] border-transparent border-t-red-500"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 設定モーダル */}
+                    {isSettingsOpen && (
+                        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+                            <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-96 border border-gray-700">
+                                <h2 className="text-lg font-bold mb-4 border-b border-gray-700 pb-2">プロジェクト設定</h2>
+                                
+                                <div className="space-y-4 text-sm">
+                                    <div>
+                                        <label className="block text-gray-400 mb-1">解像度プリセット</label>
+                                        <select 
+                                            value={settings.res}
+                                            onChange={(e) => {
+                                                const res = e.target.value;
+                                                setSettings({...settings, res, width: RESOLUTIONS[res].w, height: RESOLUTIONS[res].h});
+                                            }}
+                                            className="w-full bg-gray-900 border border-gray-700 rounded p-2 focus:border-blue-500 outline-none">
+                                            {Object.keys(RESOLUTIONS).map(r => <option key={r} value={r}>{r} ({RESOLUTIONS[r].w}x{RESOLUTIONS[r].h})</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-gray-400 mb-1">フレームレート (fps)</label>
+                                        <input type="number" value={settings.fps} onChange={e => setSettings({...settings, fps: Number(e.target.value)})} className="w-full bg-gray-900 border border-gray-700 rounded p-2 outline-none"/>
+                                    </div>
+                                    <div>
+                                        <label className="block text-gray-400 mb-1">映像ビットレート (bps)</label>
+                                        <input type="number" value={settings.vBitrate} onChange={e => setSettings({...settings, vBitrate: Number(e.target.value)})} className="w-full bg-gray-900 border border-gray-700 rounded p-2 outline-none"/>
+                                    </div>
+                                </div>
+                                
+                                <div className="mt-6 flex justify-end">
+                                    <button onClick={() => setIsSettingsOpen(false)} className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded font-bold transition">閉じる / 適用</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
-                <div>
-                  <label className="block text-[11px] text-slate-500 mb-1">高さ (px)</label>
-                  <input type="number" disabled={projectSettings.resolutionLabel !== 'custom'} value={projectSettings.height} onChange={e => setProjectSettings(p => ({...p, height: parseInt(e.target.value)}))} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm outline-none disabled:opacity-50" />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] text-slate-500 mb-1">フレームレート (FPS)</label>
-                <select value={projectSettings.fps} onChange={e => setProjectSettings(p => ({...p, fps: parseInt(e.target.value)}))} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm outline-none">
-                  <option value={24}>24 fps (シネマティック)</option>
-                  <option value={30}>30 fps (標準)</option>
-                  <option value={60}>60 fps (高滑らかさ)</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[11px] text-slate-500 mb-1">映像ビットレート</label>
-                  <div className="relative">
-                    <input type="number" step="0.1" value={projectSettings.videoBitrate / 1000000} onChange={e => setProjectSettings(p => ({...p, videoBitrate: Math.floor(parseFloat(e.target.value) * 1000000)}))} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm outline-none pr-10" />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">Mbps</span>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[11px] text-slate-500 mb-1">音声ビットレート</label>
-                  <div className="relative">
-                    <input type="number" step="8" value={projectSettings.audioBitrate / 1000} onChange={e => setProjectSettings(p => ({...p, audioBitrate: Math.floor(parseFloat(e.target.value) * 1000)}))} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm outline-none pr-10" />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">kbps</span>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="pt-4 flex justify-end">
-                <button onClick={() => setShowSettingsModal(false)} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded text-sm font-medium transition-colors">
-                  完了
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-    </div>
-  );
-}
-
-
-// --- Timeline Components ---
-
-const TimelineRuler = ({ duration, currentTime, onSeek }) => {
-  const handleSeek = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left + e.currentTarget.scrollLeft;
-    let t = x / 100;
-    t = Math.max(0, Math.min(t, duration));
-    onSeek(t);
-  };
-
-  const ticks = [];
-  for (let i = 0; i <= duration + 5; i++) {
-    ticks.push(
-      <div key={i} className="absolute h-full border-l border-slate-700 pl-1 text-[10px] text-slate-500 pointer-events-none" style={{ left: `${i * 100}px` }}>
-        {i}s
-      </div>
-    );
-  }
-
-  return (
-    <div 
-      className="h-6 bg-slate-950 border-b border-slate-800 sticky top-0 z-20 cursor-text overflow-hidden"
-      onMouseDown={handleSeek}
-    >
-      <div className="relative h-full" style={{ width: `${(duration + 10) * 100}px` }}>
-        {ticks}
-      </div>
-    </div>
-  );
-};
-
-const TimelineClip = ({ layer, isSelected, onSelect, onChange }) => {
-  const trackRef = useRef(null);
-  const PIXELS_PER_SEC = 100;
-
-  const handleMouseDown = (e, action) => {
-    e.stopPropagation();
-    onSelect();
-    const startX = e.clientX;
-    const startObj = { startTime: layer.startTime, duration: layer.duration, trimStart: layer.trimStart };
-
-    const handleMouseMove = (mvEvent) => {
-      const dx = mvEvent.clientX - startX;
-      const dt = dx / PIXELS_PER_SEC;
-
-      if (action === 'move') {
-        onChange({ startTime: Math.max(0, startObj.startTime + dt) });
-      } else if (action === 'resize-right') {
-        const maxDur = layer.type === 'video' || layer.type === 'audio' ? layer.mediaDuration - layer.trimStart : 999;
-        onChange({ duration: Math.max(0.1, Math.min(startObj.duration + dt, maxDur)) });
-      } else if (action === 'resize-left') {
-        const newStart = Math.max(0, startObj.startTime + dt);
-        const actualDt = newStart - startObj.startTime;
-        if (startObj.duration - actualDt > 0.1) {
-          const updates = { startTime: newStart, duration: startObj.duration - actualDt };
-          if (layer.type === 'video' || layer.type === 'audio') {
-            updates.trimStart = Math.max(0, startObj.trimStart + actualDt);
-          }
-          onChange(updates);
+            );
         }
-      }
-    };
 
-    const handleMouseUp = () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-  };
-
-  const getBgColor = () => {
-    if (layer.type === 'text') return 'bg-blue-600/80 hover:bg-blue-500/90 border-blue-400';
-    if (layer.type === 'video') return 'bg-emerald-600/80 hover:bg-emerald-500/90 border-emerald-400';
-    if (layer.type === 'audio') return 'bg-purple-600/80 hover:bg-purple-500/90 border-purple-400';
-    return 'bg-amber-600/80 hover:bg-amber-500/90 border-amber-400';
-  };
-
-  return (
-    <div className="h-10 border-b border-slate-800 relative">
-      <div 
-        ref={trackRef}
-        className={`absolute top-1.5 h-7 rounded border shadow-sm flex items-center overflow-hidden cursor-grab active:cursor-grabbing
-          ${getBgColor()} ${isSelected ? 'ring-2 ring-white/50 z-10' : 'opacity-90'}`}
-        style={{ left: `${layer.startTime * PIXELS_PER_SEC}px`, width: `${layer.duration * PIXELS_PER_SEC}px` }}
-        onMouseDown={(e) => handleMouseDown(e, 'move')}
-      >
-        {/* Left Trim Handle */}
-        <div 
-          className="w-2 h-full bg-white/20 hover:bg-white/50 cursor-ew-resize shrink-0" 
-          onMouseDown={(e) => handleMouseDown(e, 'resize-left')}
-        />
-        
-        {/* Content */}
-        <div className="flex-1 px-2 text-[10px] font-medium text-white truncate pointer-events-none">
-          {layer.name} {layer.type === 'text' && `- ${layer.text}`}
-        </div>
-        
-        {/* Right Trim Handle */}
-        <div 
-          className="w-2 h-full bg-white/20 hover:bg-white/50 cursor-ew-resize shrink-0" 
-          onMouseDown={(e) => handleMouseDown(e, 'resize-right')}
-        />
-      </div>
-    </div>
-  );
-};
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
