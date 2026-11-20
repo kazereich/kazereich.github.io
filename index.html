@@ -1,314 +1,697 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#0b1020">
-<title>ローカル暴言判定AI</title>
-<style>
-:root{color-scheme:dark;--bg:#090e1b;--panel:#111a2d;--panel2:#0e1728;--line:#263550;--text:#e8eefb;--muted:#91a1bb;--blue:#6ea8ff;--cyan:#5eead4;--red:#fb7185;--amber:#fbbf24;--green:#4ade80;--shadow:0 16px 44px #0005}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(1100px 550px at 80% -10%,#1c3156 0%,transparent 62%),var(--bg);color:var(--text);font-family:Inter,"Noto Sans JP",system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh}
-button,input,textarea,select{font:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:10px;color:var(--text);background:#1a2942;padding:10px 14px;transition:.15s}button:hover{filter:brightness(1.14);transform:translateY(-1px)}button:disabled{opacity:.4;cursor:not-allowed;transform:none}.primary{background:linear-gradient(135deg,#3978dc,#4b60c9);border-color:#638fe1}.good{background:#12382f;border-color:#23634f}.bad{background:#401e2b;border-color:#743549}.ghost{background:#111c30}.warn{background:#40331b;border-color:#725522}.small{padding:6px 9px;font-size:12px}.dangerText{color:var(--red)}.muted{color:var(--muted)}
-header{max-width:1180px;margin:auto;padding:26px 22px 12px;display:flex;align-items:center;justify-content:space-between;gap:16px}.brand{display:flex;align-items:center;gap:13px}.logo{width:45px;height:45px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(145deg,#3978dc,#36b7aa);font-size:23px;box-shadow:0 8px 24px #2864bd55}.brand h1{font-size:20px;margin:0;letter-spacing:.02em}.brand p{margin:4px 0 0;color:var(--muted);font-size:12px}.status{display:flex;align-items:center;gap:7px;color:#a8efd6;background:#102a2b;border:1px solid #22564f;padding:8px 11px;border-radius:20px;font-size:12px;white-space:nowrap}.dot{width:7px;height:7px;background:var(--green);border-radius:50%;box-shadow:0 0 10px #4ade80}
-main{max-width:1180px;margin:auto;padding:10px 22px 42px}.notice{border:1px solid #67552a;background:#2a2416;color:#f5df9b;border-radius:12px;padding:12px 15px;font-size:12px;line-height:1.7;margin:4px 0 17px}.notice strong{color:#fff0bd}.tabs{display:flex;gap:7px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:18px}.tab{background:transparent;color:var(--muted);border-color:transparent}.tab.active{color:#fff;background:#1a2a45;border-color:#324967}
-.panel{background:linear-gradient(180deg,#121d32ee,#0f1829ee);border:1px solid var(--line);border-radius:17px;padding:20px;box-shadow:var(--shadow)}.grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(300px,.75fr);gap:17px}.sectionTitle{font-size:15px;font-weight:700;margin:0 0 13px}.sub{color:var(--muted);font-size:12px;line-height:1.7}.fieldLabel{display:block;font-size:12px;color:#bdcbe0;margin:0 0 7px}textarea,input[type=text],select{width:100%;border:1px solid #334563;background:#0a1324;color:var(--text);border-radius:10px;padding:12px;outline:none}textarea:focus,input:focus,select:focus{border-color:#6ea8ff;box-shadow:0 0 0 3px #6ea8ff22}textarea{min-height:142px;resize:vertical;line-height:1.65}.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.actions{display:flex;gap:9px;align-items:center;margin-top:12px}.resultPanel{display:flex;flex-direction:column;min-height:100%}.resultTop{display:flex;justify-content:space-between;gap:10px;align-items:center}.pill{font-size:11px;padding:5px 9px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}.scoreWrap{display:grid;grid-template-columns:140px 1fr;gap:18px;align-items:center;margin:23px 0 15px}.gauge{width:138px;height:138px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--blue) 0deg,#263550 0deg);position:relative}.gauge:before{content:"";position:absolute;inset:9px;background:#111b2e;border-radius:50%}.gaugeInner{z-index:1;text-align:center}.gaugeNum{font-size:29px;font-weight:800;letter-spacing:-1px}.gaugeCaption{font-size:10px;color:var(--muted);margin-top:2px}.verdict{font-size:22px;font-weight:800;margin-bottom:6px}.verdict.badText{color:var(--red)}.verdict.goodText{color:var(--green)}.bar{height:8px;background:#26344d;border-radius:10px;overflow:hidden;margin:10px 0}.bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#4b96ee,#fb7185);border-radius:10px;transition:width .25s}.ruleLine{height:1px;background:var(--line);margin:15px 0}.detailList{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.chip{font-size:11px;border:1px solid #46536a;background:#1b2940;color:#c9d8ed;padding:5px 8px;border-radius:7px}.chip.hit{border-color:#8e3e55;background:#3a1d2a;color:#ffb0bf}.emptyState{color:#74839c;font-size:13px;line-height:1.8;text-align:center;padding:25px 8px}.feedbackArea{margin-top:auto;padding-top:15px}.feedbackArea p{font-size:12px;color:var(--muted);margin:0 0 9px}.feedbackBtns{display:grid;grid-template-columns:1fr 1fr;gap:9px}.feedbackResult{font-size:12px;padding:10px;border-radius:9px;background:#102a25;border:1px solid #285749;color:#a9efd5;margin-top:9px;display:none}
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:17px}.stat{padding:13px 14px;background:#0c1628;border:1px solid var(--line);border-radius:12px}.stat span{display:block;color:var(--muted);font-size:11px}.stat strong{font-size:22px;display:block;margin-top:5px}.twoCol{display:grid;grid-template-columns:1fr 1fr;gap:15px}.listBox{border:1px solid var(--line);border-radius:12px;overflow:hidden}.listHead{padding:11px 13px;background:#16243a;display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700}.listBody{max-height:360px;overflow:auto}.listItem{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 12px;border-top:1px solid #263550;font-size:13px}.listItem:first-child{border-top:0}.listItem .term{overflow-wrap:anywhere}.itemMeta{font-size:10px;color:var(--muted);margin-top:3px}.addRow{display:flex;gap:7px;padding:11px;border-top:1px solid var(--line)}.addRow input{min-width:0}.emptyList{color:#73829c;font-size:12px;padding:18px;text-align:center}.miniBtn{padding:5px 8px;font-size:11px;flex:none}.learningCards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:15px}.learnCard{background:#0b1526;border:1px solid var(--line);border-radius:12px;padding:13px}.learnCard span{font-size:11px;color:var(--muted)}.learnCard strong{display:block;font-size:22px;margin-top:4px}.history{border:1px solid var(--line);border-radius:12px;overflow:hidden}.historyRow{padding:12px 14px;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}.historyRow:first-child{border-top:0}.historyText{font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere}.historyMeta{color:var(--muted);font-size:11px;margin-top:5px}.labelBadge{font-size:10px;padding:4px 7px;border-radius:6px;white-space:nowrap}.labelBadge.off{background:#3b1c2a;color:#ffb4c2}.labelBadge.safe{background:#12382f;color:#9cebd2}.footerNote{margin-top:17px;color:#75849d;font-size:11px;line-height:1.8}.hidden{display:none!important}.thresholdRow{display:flex;align-items:center;gap:10px;margin-top:12px;color:var(--muted);font-size:12px}.thresholdRow input{width:auto}.fileInput{display:none}.jsonTools{display:flex;gap:8px;flex-wrap:wrap}.inlineNotice{margin-top:10px;color:var(--muted);font-size:11px;line-height:1.6}.toast{position:fixed;right:20px;bottom:20px;background:#14243a;border:1px solid #405a7d;color:#e8f1ff;padding:12px 15px;border-radius:10px;box-shadow:var(--shadow);font-size:13px;z-index:20;opacity:0;transform:translateY(10px);pointer-events:none;transition:.2s}.toast.show{opacity:1;transform:translateY(0)}
-@media(max-width:800px){.grid{grid-template-columns:1fr}.twoCol{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.learningCards{grid-template-columns:repeat(3,1fr)}header{align-items:flex-start}.status{font-size:10px}}
-@media(max-width:480px){header{padding:18px 14px 10px}.brand h1{font-size:17px}.brand p{font-size:10px}.logo{width:39px;height:39px}main{padding:8px 13px 30px}.panel{padding:15px}.scoreWrap{grid-template-columns:112px 1fr;gap:12px}.gauge{width:110px;height:110px}.gaugeNum{font-size:24px}.verdict{font-size:18px}.learningCards{grid-template-columns:1fr 1fr}.learningCards .learnCard:last-child{grid-column:span 2}.actions{flex-wrap:wrap}.actions button{flex:1}}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Video Editor Prototype</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* カスタムスクロールバー（ダークテーマ用） */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1f2937; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280; 
+        }
+        
+        /* タイムラインのレイヤートラック用のスタイル */
+        .timeline-track {
+            background-image: linear-gradient(to right, #374151 1px, transparent 1px);
+            background-size: 50px 100%;
+        }
+    </style>
 </head>
-<body>
-<header>
-  <div class="brand"><div class="logo">🧠</div><div><h1>ローカル暴言判定AI</h1><p>Offline · Adaptive text moderation · No external API</p></div></div>
-  <div class="status"><i class="dot"></i>端末内で動作中・通信なし</div>
-</header>
-<main>
-  <div class="notice"><strong>このAIについて：</strong>これは事前学習済みの大規模LLMではなく、単語・文字の特徴と文章全体のパターンを使う、端末内で継続学習するテキスト分類AIです。外部APIの回数制限はありませんが、処理速度・保存量は端末の性能とブラウザの保存容量に依存します。人間の評価を重ねるほど、このアプリ内の学習データに合わせて判定が改善します。</div>
-  <nav class="tabs">
-    <button class="tab active" data-tab="check">判定する</button>
-    <button class="tab" data-tab="words">暴言・例外リスト</button>
-    <button class="tab" data-tab="learning">学習・判定履歴</button>
-    <button class="tab" data-tab="data">データ管理</button>
-  </nav>
+<body class="bg-gray-900 text-gray-100 h-screen flex flex-col font-sans overflow-hidden">
 
-  <section id="tab-check">
-    <div class="grid">
-      <div class="panel">
-        <h2 class="sectionTitle">メッセージを判定</h2>
-        <label class="fieldLabel" for="message">チェックしたい文章</label>
-        <textarea id="message" maxlength="5000" placeholder="例：ゲーム好きだしね&#10;例：お前は本当に最低だ&#10;&#10;文章を入力して「判定する」を押してください。"></textarea>
-        <div class="row" style="justify-content:space-between;margin-top:7px"><span class="sub">最大5,000文字 · 入力内容は外部へ送信されません</span><span class="sub" id="charCount">0 / 5000</span></div>
-        <div class="actions"><button class="primary" id="analyzeBtn">✦ 判定する</button><button class="ghost" id="clearBtn">クリア</button><button class="ghost" id="exampleBtn">サンプルを入力</button></div>
-        <div class="thresholdRow"><label for="threshold">暴言とみなすしきい値：</label><input type="range" id="threshold" min="40" max="90" step="5" value="60"><strong id="thresholdValue">60%</strong></div>
-        <p class="inlineNotice">確率はモデルの推定スコアです。法律上・運営上の確定判断ではありません。皮肉、引用、方言、隠語などは誤判定することがあるため、人間の確認を前提にしてください。</p>
-      </div>
-      <div class="panel resultPanel">
-        <div class="resultTop"><h2 class="sectionTitle" style="margin:0">判定結果</h2><span class="pill" id="modelStatus">モデル準備中</span></div>
-        <div id="emptyResult" class="emptyState">文章を入力して判定すると、<br>暴言である推定確率と判定理由を表示します。</div>
-        <div id="resultContent" class="hidden">
-          <div class="scoreWrap"><div class="gauge" id="gauge"><div class="gaugeInner"><div class="gaugeNum" id="probability">0%</div><div class="gaugeCaption">暴言の推定確率</div></div></div><div><div class="verdict" id="verdict">判定</div><div class="sub" id="verdictSub"></div><div class="bar"><i id="probBar"></i></div><div class="sub">判定基準：<strong id="thresholdText">60%</strong></div></div></div>
-          <div class="ruleLine"></div>
-          <div class="sub" style="font-weight:700;color:#dce8f8">判定に影響した特徴</div>
-          <div class="detailList" id="reasonTags"></div>
-          <p class="sub" id="reasonText" style="margin-top:10px"></p>
-          <div class="feedbackArea">
-            <p>このAIの判定は正しいですか？ 人間の評価を次回以降の学習に反映します。</p>
-            <div class="feedbackBtns"><button class="bad" id="punishBtn">⚑ 処罰する（暴言）</button><button class="good" id="noPunishBtn">✓ 処罰ではない</button></div>
-            <div class="feedbackResult" id="feedbackResult"></div>
-          </div>
+    <!-- ヘッダー -->
+    <header class="bg-gray-800 border-b border-gray-700 h-14 flex items-center justify-between px-4 shrink-0">
+        <div class="flex items-center gap-2">
+            <div class="w-3 h-3 rounded-full bg-red-500"></div>
+            <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+            <div class="w-3 h-3 rounded-full bg-green-500"></div>
+            <h1 class="ml-4 font-bold text-lg tracking-wider text-gray-200">Web Video Editor <span class="text-xs text-gray-400 font-normal">Prototype</span></h1>
         </div>
-      </div>
-    </div>
-    <div class="stats">
-      <div class="stat"><span>累計判定数</span><strong id="statChecks">0</strong></div>
-      <div class="stat"><span>学習した評価数</span><strong id="statFeedback">0</strong></div>
-      <div class="stat"><span>学習報酬ポイント</span><strong id="statReward">0</strong></div>
-      <div class="stat"><span>学習サンプル数</span><strong id="statSamples">0</strong></div>
-    </div>
-  </section>
+        <div class="flex items-center gap-3">
+            <span id="status-text" class="text-sm text-green-400 mr-4"></span>
+            <button id="btn-export" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 shadow-lg">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                動画を保存 (WebM)
+            </button>
+        </div>
+    </header>
 
-  <section id="tab-words" class="hidden">
-    <div class="panel">
-      <h2 class="sectionTitle">単語・文章パターンの管理</h2>
-      <p class="sub" style="margin-top:-6px;margin-bottom:16px">登録した暴言語句は判定時の手がかりになります。例外パターンは「この文脈では暴言ではない」という学習データとして扱います。単語1つだけで決めつけず、文章全体の学習結果と組み合わせます。</p>
-      <div class="twoCol">
-        <div class="listBox"><div class="listHead"><span>暴言リスト</span><span class="pill" id="insultCount">0件</span></div><div class="listBody" id="insultList"></div><div class="addRow"><input type="text" id="newInsult" placeholder="暴言・侮辱表現を追加"><select id="insultWeight" style="width:105px"><option value="1">弱</option><option value="2" selected>中</option><option value="3">強</option></select><button class="primary small" id="addInsult">追加</button></div></div>
-        <div class="listBox"><div class="listHead"><span>例外パターン・安全な表現</span><span class="pill" id="safeCount">0件</span></div><div class="listBody" id="safeList"></div><div class="addRow"><input type="text" id="newSafe" placeholder="例：ゲーム好きだしね"><button class="good small" id="addSafe">例外として学習</button></div></div>
-      </div>
-      <p class="footerNote">例外を追加すると、文章全体を「処罰ではない」とする教師データにも登録されます。たとえば「shine（光り輝け）」のように一部の文字列が暴言語と似ていても、周囲の文脈を含む例文として学習できます。学習した結果はJSONに書き出して別の端末へ移せます。</p>
-    </div>
-  </section>
+    <!-- メインコンテンツ -->
+    <main class="flex-1 flex overflow-hidden">
+        
+        <!-- 左側：プレビュー & コントロール -->
+        <section class="flex-1 flex flex-col border-r border-gray-700 bg-gray-950">
+            <!-- キャンバスエリア -->
+            <div class="flex-1 p-4 flex items-center justify-center overflow-hidden relative">
+                <!-- 動画描画用キャンバス（内部解像度は1920x1080などに固定し、CSSで表示サイズを調整） -->
+                <canvas id="preview-canvas" width="1280" height="720" class="w-full max-w-full max-h-full object-contain bg-black shadow-2xl rounded-md border border-gray-800"></canvas>
+            </div>
+            
+            <!-- コントロールバー -->
+            <div class="bg-gray-800 border-t border-gray-700 p-3 shrink-0 flex flex-col gap-2">
+                <!-- シークバー (プロトタイプでは動画全体の進行度) -->
+                <div class="flex items-center gap-2">
+                    <span id="time-current" class="text-xs font-mono text-gray-400 w-12 text-right">00:00</span>
+                    <input type="range" id="seek-bar" min="0" max="100" value="0" class="flex-1 h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+                    <span id="time-total" class="text-xs font-mono text-gray-400 w-12">00:00</span>
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <button id="btn-play" class="p-2 bg-gray-700 hover:bg-gray-600 rounded-full transition-colors" title="再生">
+                            <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
+                        </button>
+                        <button id="btn-pause" class="p-2 bg-gray-700 hover:bg-gray-600 rounded-full transition-colors hidden" title="一時停止">
+                            <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+                        </button>
+                        <button id="btn-stop" class="p-2 bg-gray-700 hover:bg-gray-600 rounded-full transition-colors" title="停止">
+                            <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd"></path></svg>
+                        </button>
+                    </div>
+                    
+                    <div class="flex items-center gap-3">
+                        <label class="text-xs text-gray-400">再生スピード:</label>
+                        <input type="range" id="speed-slider" min="0.25" max="3" step="0.25" value="1" class="w-24 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+                        <span id="speed-value" class="text-xs font-mono text-gray-300 w-8">1.0x</span>
+                    </div>
+                </div>
+            </div>
+        </section>
 
-  <section id="tab-learning" class="hidden">
-    <div class="panel">
-      <h2 class="sectionTitle">人間の評価による学習</h2>
-      <div class="learningCards">
-        <div class="learnCard"><span>正しい判定への加点</span><strong style="color:var(--green)">+1 pt</strong></div>
-        <div class="learnCard"><span>間違った判定への減点</span><strong style="color:var(--red)">−1 pt</strong></div>
-        <div class="learnCard"><span>更新方式</span><strong style="font-size:16px">オンライン学習</strong></div>
-      </div>
-      <p class="sub" style="margin:0 0 15px">判定後に人間が「処罰する／処罰ではない」を選ぶと、その文章を正解ラベル付きで保存し、文字の並び・単語・前後の組み合わせを使う分類モデルを更新します。AIが60%以上で処罰、または60%未満で処罰なしと判定し、人間の評価と一致した場合は+1点。不一致なら−1点です。ポイントは学習状況の目安であり、AIの性能を保証するものではありません。</p>
-      <div class="row" style="justify-content:space-between;margin:12px 0"><h3 class="sectionTitle" style="margin:0">最近の学習・判定履歴</h3><span class="pill" id="historyCount">0件</span></div>
-      <div class="history" id="historyList"><div class="emptyList">まだ履歴はありません。</div></div>
-    </div>
-  </section>
+        <!-- 右側：プロパティ（インスペクタ） -->
+        <aside class="w-80 bg-gray-800 flex flex-col shrink-0">
+            <div class="p-3 border-b border-gray-700 bg-gray-850">
+                <h2 class="text-sm font-bold text-gray-300">プロパティ (選択中のレイヤー)</h2>
+            </div>
+            
+            <div id="properties-panel" class="p-4 flex-1 overflow-y-auto space-y-4">
+                <div id="no-selection-msg" class="text-sm text-gray-500 text-center mt-10">
+                    レイヤーが選択されていません
+                </div>
+                
+                <!-- テキストレイヤー用設定（JSで表示切り替え） -->
+                <div id="text-properties" class="hidden space-y-4">
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">テキスト内容</label>
+                        <textarea id="prop-text-content" rows="3" class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm text-white focus:outline-none focus:border-blue-500"></textarea>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">フォント</label>
+                            <select id="prop-font-family" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white focus:outline-none">
+                                <option value="sans-serif">ゴシック体</option>
+                                <option value="serif">明朝体</option>
+                                <option value="monospace">等幅</option>
+                                <option value="Impact">Impact</option>
+                                <option value="Comic Sans MS">Comic Sans</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">サイズ</label>
+                            <input type="number" id="prop-font-size" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white focus:outline-none" value="48">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">文字色</label>
+                        <div class="flex items-center gap-2">
+                            <input type="color" id="prop-color" class="w-8 h-8 rounded cursor-pointer bg-transparent border-0 p-0">
+                            <input type="text" id="prop-color-text" class="flex-1 bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white" value="#ffffff">
+                        </div>
+                    </div>
 
-  <section id="tab-data" class="hidden">
-    <div class="panel">
-      <h2 class="sectionTitle">学習データの保存・読み込み</h2>
-      <p class="sub" style="margin-top:-5px">モデルの重み、暴言リスト、例外パターン、人間の評価、報酬ポイント、履歴をJSONファイルにまとめて保存できます。別のブラウザやPCに移す場合も、書き出したJSONを読み込んでください。</p>
-      <div class="jsonTools" style="margin:16px 0"><button class="primary" id="exportBtn">⬇ JSONで保存</button><button class="ghost" id="importBtn">⬆ JSONを読み込む</button><input class="fileInput" id="importFile" type="file" accept=".json,application/json"><button class="warn" id="resetBtn">初期状態にリセット</button></div>
-      <div class="ruleLine"></div>
-      <div class="twoCol"><div><h3 class="sectionTitle">自動保存</h3><p class="sub">このブラウザのローカルストレージに、判定・学習のたびに自動保存します。ブラウザのデータ削除や別端末への移動に備え、定期的にJSON保存してください。</p><div class="pill" id="saveStatus">保存状態を確認中</div></div><div><h3 class="sectionTitle">データの内容</h3><div class="sub" id="dataSummary">読み込み中...</div></div></div>
-      <p class="footerNote">このHTMLは外部通信を行わず、CDN・外部API・追加ライブラリも使用しません。JSONの読み込みは本アプリ形式のファイルを対象とします。保存容量にはブラウザ側の上限があります。「無制限」のクラウド保存ではありません。</p>
-    </div>
-  </section>
-</main>
-<div class="toast" id="toast"></div>
-<script>
-'use strict';
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">位置 X</label>
+                            <input type="number" id="prop-pos-x" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white" value="640">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">位置 Y</label>
+                            <input type="number" id="prop-pos-y" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white" value="360">
+                        </div>
+                    </div>
+                </div>
 
-// ------------------------------------------------------------
-// Offline adaptive classifier: no external requests or libraries.
-// This is a compact supervised text classifier, not a pretrained LLM.
-// ------------------------------------------------------------
-const STORAGE_KEY = 'local_abuse_ai_v1';
-const DEFAULT_THRESHOLD = 60;
-const SEED_INSULTS = [
-  {term:'死ね',weight:3},{term:'しね',weight:3},{term:'消えろ',weight:3},{term:'くたばれ',weight:3},
-  {term:'殺すぞ',weight:3},{term:'死んで',weight:3},{term:'ゴミ',weight:2},{term:'ごみ',weight:2},
-  {term:'クズ',weight:2},{term:'くず',weight:2},{term:'カス',weight:2},{term:'かす',weight:2},
-  {term:'バカ',weight:2},{term:'ばか',weight:2},{term:'アホ',weight:2},{term:'あほ',weight:2},
-  {term:'キモい',weight:2},{term:'きもい',weight:2},{term:'うざい',weight:1},{term:'うぜえ',weight:2},
-  {term:'黙れ',weight:2},{term:'無能',weight:2},{term:'ブス',weight:2},{term:'雑魚',weight:1}
-];
-const SEED_SAFE = [
-  {term:'ゲーム好きだしね',kind:'文脈例外'},{term:'shine (光り輝け)',kind:'文脈例外'},
-  {term:'shine',kind:'英単語の例外'},{term:'光り輝け',kind:'文脈例外'},
-  {term:'死ぬほど好き',kind:'慣用表現'},{term:'死んだ魚を見た',kind:'通常の説明'},
-  {term:'「死ね」と言われた',kind:'引用・被害報告'},{term:'「死ね」と言われて悲しかった',kind:'引用・被害報告'},{term:'このバカンスは最高',kind:'似た文字列'},{term:'ゴミ箱',kind:'通常の名詞'},{term:'ゴミ拾い',kind:'通常の活動'},{term:'moonshine',kind:'英単語の例外'}
-];
-const SEED_TRAINING = [
-  ['死ね',1],['お前なんか消えろ',1],['くたばれよ',1],['お前は本当に無能だ',1],
-  ['きもいんだよ、あっち行け',1],['このゴミが',1],['バカ、ふざけるな',1],['お前は役立たずだ',1],
-  ['黙れ、このクズ',1],['お前なんて大嫌いだ',1],['雑魚すぎる、消えろ',1],['死んでしまえ',1],
-  ['ゲーム好きだしね',0],['shine (光り輝け)',0],['shine',0],['光り輝け',0],
-  ['彼は死ぬほどゲームが好き',0],['死んだ魚を見つけた',0],['「死ね」と言われて悲しかった',0],
-  ['このバカンスは最高だった',0],['今日はゲームをして遊んだ',0],['その考え方は面白いね',0],
-  ['この作品が好きです',0],['明日も一緒に頑張ろう',0]
-];
+                <!-- メディアレイヤー用設定 -->
+                <div id="media-properties" class="hidden space-y-4">
+                     <div>
+                        <label class="block text-xs text-gray-400 mb-1">ファイル名</label>
+                        <input type="text" id="prop-media-name" disabled class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-gray-500">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">スケール (%)</label>
+                            <input type="number" id="prop-media-scale" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white" value="100">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">位置 X</label>
+                            <input type="number" id="prop-media-x" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white" value="0">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">位置 Y</label>
+                            <input type="number" id="prop-media-y" class="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-sm text-white" value="0">
+                        </div>
+                    </div>
+                </div>
 
-let db = null;
-let lastPrediction = null;
-let tokenizer = null;
-try { if (typeof Intl !== 'undefined' && Intl.Segmenter) tokenizer = new Intl.Segmenter('ja',{granularity:'word'}); } catch(e) {}
+            </div>
+        </aside>
 
-function freshDB(){
-  const training = SEED_TRAINING.map(([text,label],i)=>({text,label,source:'初期データ',time:Date.now()-((SEED_TRAINING.length-i)*1000)}));
-  return {format:'local-abuse-ai',version:1,threshold:DEFAULT_THRESHOLD,insults:structuredCloneSafe(SEED_INSULTS),safePatterns:structuredCloneSafe(SEED_SAFE),exceptions:[],training,weights:{},bias:-0.35,stats:{checks:0,feedback:0,reward:0,correct:0},history:[],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
-}
-function structuredCloneSafe(v){return JSON.parse(JSON.stringify(v));}
-function normalize(s){return String(s||'').normalize('NFKC').toLowerCase().replace(/[\u200B-\u200D\uFEFF]/g,'').replace(/\s+/g,' ').trim();}
-function sigmoid(x){if(x>25)return .999999;if(x< -25)return .000001;return 1/(1+Math.exp(-x));}
-function addFeature(map,key,value){map.set(key,(map.get(key)||0)+value);}
-function extractFeatures(text){
-  const norm=normalize(text); const f=new Map(); if(!norm)return f;
-  const chars=Array.from(norm).slice(0,220); const charScale=1/Math.sqrt(Math.max(1,chars.length));
-  // Character n-grams help with Japanese words, spelling variants and partial context.
-  for(let n=2;n<=3;n++) for(let i=0;i<=chars.length-n;i++) addFeature(f,'c'+n+':'+chars.slice(i,i+n).join(''),charScale*(n===2?.72:.86));
-  // Word features and adjacent-word context when native Japanese segmentation exists.
-  let tokens=[];
-  if(tokenizer){ for(const item of tokenizer.segment(norm)){if(item.isWordLike)tokens.push(item.segment);} }
-  else { tokens=(norm.match(/[a-z0-9]+|[\u3040-\u30ff\u3400-\u9fff]+/g)||[]); }
-  tokens=tokens.slice(0,100);
-  tokens.forEach((t)=>addFeature(f,'w:'+t,1.0));
-  for(let i=0;i<tokens.length-1;i++) addFeature(f,'b:'+tokens[i]+'_'+tokens[i+1],.85);
-  // Whole-message pattern is deliberately weighted, but not used as the only signal.
-  addFeature(f,'exact:'+norm,1.65);
-  // A few structural/context flags.
-  if(/[「『"“].+[」』"”]/u.test(norm)) addFeature(f,'ctx:quoted',.3);
-  if(/(と言われ|って言われ|と書かれ|と投稿|と発言|被害|悲しかった|通報)/u.test(norm)) addFeature(f,'ctx:reporting',.8);
-  if(/(ほど好き|大好き|好きだし|好きです|光り輝|shining|shine)/u.test(norm)) addFeature(f,'ctx:benign-expression',.75);
-  return f;
-}
-function linearLogit(features){let z=Number(db.bias)||0;for(const [k,v] of features){z+=(Number(db.weights[k])||0)*v;}return z;}
-function containsPattern(norm,term,isInsult=false){
-  if(!term)return false;
-  // Latin words are matched as words (so "shine" does not match "moonshine").
-  if(/^[a-z0-9_]+$/i.test(term)){return new RegExp('(^|[^a-z0-9_])'+term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'($|[^a-z0-9_])','i').test(norm);}
-  let at=norm.indexOf(term);while(at!==-1){
-    if(isInsult && Array.from(term).length<=2){
-      const before=Array.from(norm.slice(0,at)).pop()||'';const after=Array.from(norm.slice(at+term.length))[0]||'';
-      const compoundChar=ch=>!!ch&&/[\p{Script=Han}\p{Script=Katakana}]/u.test(ch);
-      // Avoid fragments inside ordinary compounds such as バカンス / ゴミ箱 / カスタム.
-      if(compoundChar(before)||compoundChar(after)){at=norm.indexOf(term,at+1);continue;}
-    }
-    return true;
-  }return false;
-}
-function computeLexicon(text){
-  const norm=normalize(text); const hitInsults=[]; const hitSafe=[]; let bonus=0;
-  const matchedSafe=db.safePatterns.map(x=>({item:x,term:normalize(x.term)})).filter(x=>containsPattern(norm,x.term,false));
-  for(const x of matchedSafe){hitSafe.push(x.item.term);bonus-=1.05;}
-  for(const item of db.insults){const term=normalize(item.term);if(!containsPattern(norm,term,true))continue;
-    // If a human-confirmed safe phrase contains the same short string, treat it as context, not an insult hit.
-    const covered=matchedSafe.some(x=>x.term.includes(term)&&norm.includes(x.term));
-    if(!covered){hitInsults.push(item.term);bonus+=0.68*(Number(item.weight)||1);}
-  }
-  // Exact human-confirmed exceptions receive a stronger contextual correction.
-  const exactException=db.exceptions.find(x=>normalize(x.text)===norm);
-  if(exactException) bonus-=3.0;
-  return {hitInsults,hitSafe,exactException,bonus};
-}
-function predict(text){
-  const features=extractFeatures(text);const lex=computeLexicon(text);
-  let logit=linearLogit(features)+lex.bonus;
-  const p=sigmoid(logit);
-  const positive=[...features.entries()].map(([key,val])=>({key,val,impact:(Number(db.weights[key])||0)*val})).filter(x=>Math.abs(x.impact)>.08).sort((a,b)=>Math.abs(b.impact)-Math.abs(a.impact)).slice(0,5);
-  return {probability:p,features,lex,positive,threshold:(Number(db.threshold)||DEFAULT_THRESHOLD)/100};
-}
-function trainOne(sample,rate=.12){
-  const features=extractFeatures(sample.text);const y=sample.label?1:0;const p=sigmoid(linearLogit(features));const err=(y-p)*(Number(sample.weight)||1);
-  for(const [k,v] of features){const old=Number(db.weights[k])||0;const next=old+rate*(err*v-.0008*old);if(Math.abs(next)<.00001)delete db.weights[k];else db.weights[k]=Math.max(-7,Math.min(7,next));}
-  db.bias=Math.max(-8,Math.min(8,(Number(db.bias)||0)+rate*err*.45));
-}
-function initialTrain(){
-  // Fresh baseline training runs locally and is intentionally small for quick startup.
-  for(let epoch=0;epoch<34;epoch++) for(const s of db.training) trainOne(s,.13);
-}
-function incrementalTrain(newSample){
-  // Train on the new human label plus balanced replay from the full history to reduce forgetting.
-  const pool=db.training.filter(s=>s!==newSample);const pos=pool.filter(s=>s.label===1);const neg=pool.filter(s=>s.label===0);
-  const pick=(arr,n)=>{const a=arr.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a.slice(0,n);};
-  const replay=[...pick(pos,12),...pick(neg,12)];
-  for(let epoch=0;epoch<12;epoch++){trainOne(newSample,.15);for(const old of replay)trainOne(old,.075);}
-}
-function saveDB(){
-  try{db.updatedAt=new Date().toISOString();localStorage.setItem(STORAGE_KEY,JSON.stringify(db));setText('saveStatus','自動保存済み · '+new Date().toLocaleTimeString('ja-JP'));return true;}
-  catch(e){setText('saveStatus','自動保存に失敗（容量不足の可能性）');showToast('自動保存に失敗しました。JSONでバックアップしてください。');return false;}
-}
-function loadDB(){
-  try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw){db=freshDB();initialTrain();saveDB();return;}
-    const parsed=JSON.parse(raw);if(!parsed||parsed.format!=='local-abuse-ai')throw new Error('unknown format');
-    db={...freshDB(),...parsed};db.insults=Array.isArray(parsed.insults)?parsed.insults:structuredCloneSafe(SEED_INSULTS);db.safePatterns=Array.isArray(parsed.safePatterns)?parsed.safePatterns:structuredCloneSafe(SEED_SAFE);db.exceptions=Array.isArray(parsed.exceptions)?parsed.exceptions:[];db.training=Array.isArray(parsed.training)?parsed.training:[];db.weights=parsed.weights&&typeof parsed.weights==='object'?parsed.weights:{};db.stats={...{checks:0,feedback:0,reward:0,correct:0},...(parsed.stats||{})};db.history=Array.isArray(parsed.history)?parsed.history:[];if(!Object.keys(db.weights).length)initialTrain();
-  }catch(e){db=freshDB();initialTrain();saveDB();showToast('保存データを読み込めなかったため初期モデルを起動しました。');}
-}
-function setText(id,text){const el=document.getElementById(id);if(el)el.textContent=text;}
-let toastTimer=null;function showToast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2400);}
-function renderStats(){setText('statChecks',db.stats.checks.toLocaleString());setText('statFeedback',db.stats.feedback.toLocaleString());setText('statReward',(db.stats.reward>0?'+':'')+db.stats.reward.toLocaleString());setText('statSamples',db.training.length.toLocaleString());setText('modelStatus','学習済み · '+Object.keys(db.weights).length.toLocaleString()+'特徴');setText('dataSummary',`暴言語句：${db.insults.length}件 / 例外パターン：${db.safePatterns.length}件 / 人間の評価：${db.training.filter(x=>x.source!=='初期データ').length}件 / 学習重み：${Object.keys(db.weights).length.toLocaleString()}個`);}
-function renderLists(){
-  const il=document.getElementById('insultList');il.innerHTML='';setText('insultCount',db.insults.length+'件');
-  if(!db.insults.length)il.innerHTML='<div class="emptyList">登録された語句はありません。</div>';
-  db.insults.forEach((item,index)=>{const row=document.createElement('div');row.className='listItem';const left=document.createElement('div');left.className='term';left.textContent=item.term;const meta=document.createElement('div');meta.className='itemMeta';meta.textContent='強さ：'+(['','弱','中','強'][Number(item.weight)||1]);left.appendChild(meta);const del=document.createElement('button');del.className='miniBtn ghost';del.textContent='削除';del.onclick=()=>{db.insults.splice(index,1);saveDB();renderLists();renderStats();};row.append(left,del);il.appendChild(row);});
-  const sl=document.getElementById('safeList');sl.innerHTML='';setText('safeCount',db.safePatterns.length+'件');
-  if(!db.safePatterns.length)sl.innerHTML='<div class="emptyList">例外パターンはありません。</div>';
-  db.safePatterns.forEach((item,index)=>{const row=document.createElement('div');row.className='listItem';const left=document.createElement('div');left.className='term';left.textContent=item.term;const meta=document.createElement('div');meta.className='itemMeta';meta.textContent=item.kind||'例外';left.appendChild(meta);const del=document.createElement('button');del.className='miniBtn ghost';del.textContent='削除';del.onclick=()=>{db.safePatterns.splice(index,1);saveDB();renderLists();renderStats();};row.append(left,del);sl.appendChild(row);});
-}
-function renderHistory(){const root=document.getElementById('historyList');root.innerHTML='';setText('historyCount',db.history.length+'件');if(!db.history.length){root.innerHTML='<div class="emptyList">まだ履歴はありません。</div>';return;}
-  db.history.slice(0,60).forEach(h=>{const row=document.createElement('div');row.className='historyRow';const left=document.createElement('div');const txt=document.createElement('div');txt.className='historyText';txt.textContent=h.text;const meta=document.createElement('div');meta.className='historyMeta';meta.textContent=(h.time?new Date(h.time).toLocaleString('ja-JP'):'')+' · AI '+Math.round(h.probability*100)+'%'+(h.humanLabel===undefined?' · 未評価':` · 人間の評価：${h.humanLabel?'処罰':'処罰ではない'}`);left.append(txt,meta);const badge=document.createElement('span');badge.className='labelBadge '+(h.prediction?'off':'safe');badge.textContent=h.prediction?'AI：暴言':'AI：暴言ではない';row.append(left,badge);root.appendChild(row);});}
-function analyze(){
-  const text=document.getElementById('message').value.trim();if(!text){showToast('文章を入力してください。');return;}
-  const result=predict(text);db.stats.checks++;const threshold=(Number(db.threshold)||60)/100;const isOffensive=result.probability>=threshold;
-  lastPrediction={text,probability:result.probability,prediction:isOffensive,threshold,features:result.features,lex:result.lex,feedbackDone:false,time:Date.now()};
-  db.history.unshift({text,probability:result.probability,prediction:isOffensive,time:Date.now()});if(db.history.length>300)db.history.length=300;
-  showResult(lastPrediction,result);saveDB();renderStats();renderHistory();
-}
-function showResult(pred,result){
-  document.getElementById('emptyResult').classList.add('hidden');document.getElementById('resultContent').classList.remove('hidden');
-  const pct=Math.round(pred.probability*100);setText('probability',pct+'%');setText('verdict',pred.prediction?'暴言の可能性あり':'暴言の可能性は低い');
-  const verdict=document.getElementById('verdict');verdict.className='verdict '+(pred.prediction?'badText':'goodText');setText('verdictSub',pred.prediction?'設定したしきい値以上です。人間による最終確認を推奨します。':'設定したしきい値未満です。文脈によっては見逃しもあり得ます。');
-  const degrees=Math.round(pred.probability*360);const color=pred.prediction?'#fb7185':'#4ade80';document.getElementById('gauge').style.background=`conic-gradient(${color} ${degrees}deg,#263550 ${degrees}deg)`;document.getElementById('probBar').style.width=pct+'%';setText('thresholdText',Math.round(pred.threshold*100)+'%');
-  const tags=document.getElementById('reasonTags');tags.innerHTML='';let reasons=[];
-  if(pred.lex.hitInsults.length){pred.lex.hitInsults.forEach(x=>{const c=document.createElement('span');c.className='chip hit';c.textContent='暴言リスト：'+x;tags.appendChild(c);});reasons.push('登録済みの暴言語句と一致');}
-  if(pred.lex.hitSafe.length){pred.lex.hitSafe.forEach(x=>{const c=document.createElement('span');c.className='chip';c.textContent='例外語句：'+x;tags.appendChild(c);});reasons.push('例外・安全表現と一致');}
-  if(pred.lex.exactException){const c=document.createElement('span');c.className='chip';c.textContent='人間が確認した例外文';tags.appendChild(c);reasons.push('過去に人間が「処罰ではない」と確認した同一文章');}
-  pred.positive.slice(0,4).forEach(x=>{const c=document.createElement('span');c.className='chip';let label=x.key.replace(/^(c2:|c3:|w:|b:|exact:|ctx:)/,'');if(label.length>24)label=label.slice(0,24)+'…';c.textContent='学習特徴：'+label;tags.appendChild(c);});
-  if(!tags.children.length){const c=document.createElement('span');c.className='chip';c.textContent='明確な一致語句なし';tags.appendChild(c);}
-  setText('reasonText',reasons.join('。')+(reasons.length?'。':'')+' 判定は、文字の並び・単語・隣接する語・過去に学習した文例を組み合わせて算出しています。');
-  document.getElementById('feedbackResult').style.display='none';document.getElementById('punishBtn').disabled=false;document.getElementById('noPunishBtn').disabled=false;
-}
-function addHumanFeedback(label){
-  if(!lastPrediction){showToast('先に文章を判定してください。');return;}if(lastPrediction.feedbackDone){showToast('この判定には評価済みです。');return;}
-  const p=lastPrediction.probability;const aiLabel=lastPrediction.prediction?1:0;const correct=aiLabel===label;db.stats.feedback++;db.stats.correct+=correct?1:0;db.stats.reward+=correct?1:-1;
-  const sample={text:lastPrediction.text,label,source:'人間の評価',time:Date.now(),weight:1.25};db.training.push(sample);incrementalTrain(sample);
-  // A human correction of a flagged sentence becomes a stored contextual exception.
-  if(label===0 && (p>=lastPrediction.threshold || lastPrediction.lex.hitInsults.length>0)){
-    const normalized=normalize(lastPrediction.text);if(!db.exceptions.some(x=>normalize(x.text)===normalized))db.exceptions.unshift({text:lastPrediction.text,kind:'誤判定から学習',time:Date.now()});
-    if(!db.safePatterns.some(x=>normalize(x.term)===normalized))db.safePatterns.unshift({term:lastPrediction.text,kind:'人間が確認した文脈例外'});
-  }
-  const h=db.history.find(x=>x.time===lastPrediction.time&&x.text===lastPrediction.text);if(h)h.humanLabel=label;
-  lastPrediction.feedbackDone=true;document.getElementById('punishBtn').disabled=true;document.getElementById('noPunishBtn').disabled=true;
-  const box=document.getElementById('feedbackResult');box.style.display='block';box.textContent=(correct?'AIの判定と一致：+1ポイント':'AIの判定と不一致：−1ポイント')+'。学習データに追加し、モデルを更新しました。'+(label===0&&lastPrediction.lex.hitInsults.length?' この文章は文脈例外としても保存しました。':'');
-  saveDB();renderStats();renderLists();renderHistory();showToast('人間の評価を学習しました');
-}
-function addTrainingExample(text,label,source,alsoException=false){
-  text=String(text||'').trim();if(!text){showToast('文章を入力してください。');return false;}
-  const sample={text,label,source,time:Date.now(),weight:1.35};db.training.push(sample);incrementalTrain(sample);
-  if(alsoException){if(!db.exceptions.some(x=>normalize(x.text)===normalize(text)))db.exceptions.unshift({text,kind:'手動登録',time:Date.now()});}
-  saveDB();renderStats();renderHistory();return true;
-}
+    </main>
 
-// UI wiring
-for(const btn of document.querySelectorAll('.tab'))btn.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===btn));for(const id of ['check','words','learning','data'])document.getElementById('tab-'+id).classList.toggle('hidden',id!==btn.dataset.tab);if(btn.dataset.tab==='words')renderLists();if(btn.dataset.tab==='learning')renderHistory();if(btn.dataset.tab==='data')renderStats();});
-document.getElementById('message').addEventListener('input',e=>setText('charCount',e.target.value.length+' / 5000'));
-document.getElementById('analyzeBtn').addEventListener('click',analyze);
-document.getElementById('message').addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter')analyze();});
-document.getElementById('clearBtn').addEventListener('click',()=>{document.getElementById('message').value='';setText('charCount','0 / 5000');lastPrediction=null;document.getElementById('resultContent').classList.add('hidden');document.getElementById('emptyResult').classList.remove('hidden');});
-document.getElementById('exampleBtn').addEventListener('click',()=>{document.getElementById('message').value='ゲーム好きだしね';setText('charCount','8 / 5000');});
-document.getElementById('threshold').addEventListener('input',e=>{db.threshold=Number(e.target.value);setText('thresholdValue',e.target.value+'%');saveDB();});
-document.getElementById('punishBtn').addEventListener('click',()=>addHumanFeedback(1));
-document.getElementById('noPunishBtn').addEventListener('click',()=>addHumanFeedback(0));
-document.getElementById('addInsult').addEventListener('click',()=>{const term=document.getElementById('newInsult').value.trim();if(!term)return showToast('語句を入力してください。');if(db.insults.some(x=>normalize(x.term)===normalize(term)))return showToast('その語句はすでに登録されています。');db.insults.push({term,weight:Number(document.getElementById('insultWeight').value)||2});document.getElementById('newInsult').value='';saveDB();renderLists();renderStats();showToast('暴言リストに追加しました');});
-document.getElementById('newInsult').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('addInsult').click();});
-document.getElementById('addSafe').addEventListener('click',()=>{const term=document.getElementById('newSafe').value.trim();if(!term)return showToast('例外にする文章を入力してください。');if(!db.safePatterns.some(x=>normalize(x.term)===normalize(term)))db.safePatterns.push({term,kind:'手動登録'});addTrainingExample(term,0,'手動例外',true);document.getElementById('newSafe').value='';renderLists();showToast('例外文脈として登録し、学習しました');});
-document.getElementById('newSafe').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('addSafe').click();});
-document.getElementById('exportBtn').addEventListener('click',()=>{const payload={...db,exportedAt:new Date().toISOString()};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='local-abuse-ai-data-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);showToast('JSONファイルを保存しました');});
-document.getElementById('importBtn').addEventListener('click',()=>document.getElementById('importFile').click());
-document.getElementById('importFile').addEventListener('change',async e=>{const file=e.target.files&&e.target.files[0];if(!file)return;try{const parsed=JSON.parse(await file.text());if(!parsed||parsed.format!=='local-abuse-ai'||!Array.isArray(parsed.training)||!parsed.weights||typeof parsed.weights!=='object')throw new Error('形式が違います');if(!confirm('現在の学習データを、選択したJSONの内容で置き換えます。よろしいですか？'))return;db={...freshDB(),...parsed};db.insults=Array.isArray(parsed.insults)?parsed.insults:[];db.safePatterns=Array.isArray(parsed.safePatterns)?parsed.safePatterns:[];db.exceptions=Array.isArray(parsed.exceptions)?parsed.exceptions:[];db.training=parsed.training;db.weights=parsed.weights;db.stats={...{checks:0,feedback:0,reward:0,correct:0},...(parsed.stats||{})};db.history=Array.isArray(parsed.history)?parsed.history:[];saveDB();renderStats();renderLists();renderHistory();showToast('JSONデータを読み込みました');}catch(err){showToast('読み込み失敗：このアプリのJSONか確認してください。');}finally{e.target.value='';}});
-document.getElementById('resetBtn').addEventListener('click',()=>{if(!confirm('すべての追加学習・リスト・履歴を消して初期状態に戻します。JSONバックアップがなければ元に戻せません。実行しますか？'))return;db=freshDB();initialTrain();lastPrediction=null;saveDB();renderStats();renderLists();renderHistory();document.getElementById('resultContent').classList.add('hidden');document.getElementById('emptyResult').classList.remove('hidden');setText('thresholdValue',db.threshold+'%');document.getElementById('threshold').value=db.threshold;showToast('初期状態に戻しました');});
+    <!-- タイムライン / レイヤー -->
+    <footer class="h-64 bg-gray-900 border-t border-gray-700 flex flex-col shrink-0">
+        <!-- タイムラインツールバー -->
+        <div class="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700">
+            <button id="btn-add-text" class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors flex items-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"></path></svg>
+                テキスト追加
+            </button>
+            <div class="relative">
+                <input type="file" id="file-import" accept="video/*,image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                <button class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                    メディア読み込み
+                </button>
+            </div>
+            <button id="btn-delete-layer" class="px-3 py-1.5 bg-red-900/50 hover:bg-red-800/80 text-red-200 rounded text-sm transition-colors ml-auto">
+                削除
+            </button>
+        </div>
 
-// Start-up
-loadDB();document.getElementById('threshold').value=db.threshold||DEFAULT_THRESHOLD;setText('thresholdValue',(db.threshold||DEFAULT_THRESHOLD)+'%');renderStats();renderLists();renderHistory();setText('saveStatus','保存データを読み込みました');
-</script>
+        <!-- タイムライントラックエリア -->
+        <div class="flex-1 flex overflow-hidden">
+            <!-- レイヤーヘッダー -->
+            <div class="w-48 bg-gray-800 border-r border-gray-700 flex flex-col overflow-y-auto" id="layer-headers">
+                <!-- JSで動的に追加 -->
+            </div>
+            <!-- トラック（ブロック表示） -->
+            <div class="flex-1 bg-gray-900 overflow-auto relative timeline-track" id="timeline-tracks">
+                <!-- 時間軸の目盛り（簡易） -->
+                <div class="h-6 border-b border-gray-700 sticky top-0 bg-gray-800/90 z-10 flex text-[10px] text-gray-500 items-center pl-2" id="time-ruler">
+                    <!-- CSSの背景で代用し、ここではシークバーの線のみ -->
+                </div>
+                <!-- 再生ヘッド線 -->
+                <div id="playhead" class="absolute top-0 bottom-0 w-px bg-red-500 z-20 pointer-events-none" style="left: 0%;"></div>
+                
+                <!-- トラックコンテナ (JSで動的に追加) -->
+                <div id="tracks-container" class="relative">
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- アプリケーションロジック -->
+    <script>
+        /**
+         * State & Configuration
+         */
+        const AppState = {
+            canvasWidth: 1280,
+            canvasHeight: 720,
+            layers: [], // 各レイヤーオブジェクトを格納
+            selectedLayerId: null,
+            currentTime: 0, // 秒
+            duration: 10, // デフォルト10秒。動画読み込み時に拡張
+            isPlaying: false,
+            playbackRate: 1.0,
+            animationFrameId: null,
+            nextLayerId: 1,
+            
+            // 録画用
+            mediaRecorder: null,
+            recordedChunks: [],
+            isRecording: false
+        };
+
+        // DOM Elements
+        const canvas = document.getElementById('preview-canvas');
+        const ctx = canvas.getContext('2d');
+        const fileImport = document.getElementById('file-import');
+        
+        // Controls
+        const btnPlay = document.getElementById('btn-play');
+        const btnPause = document.getElementById('btn-pause');
+        const btnStop = document.getElementById('btn-stop');
+        const speedSlider = document.getElementById('speed-slider');
+        const speedValue = document.getElementById('speed-value');
+        const seekBar = document.getElementById('seek-bar');
+        const timeCurrentText = document.getElementById('time-current');
+        const timeTotalText = document.getElementById('time-total');
+        
+        // Properties Panel
+        const noSelectionMsg = document.getElementById('no-selection-msg');
+        const textProps = document.getElementById('text-properties');
+        const mediaProps = document.getElementById('media-properties');
+        
+        // Timeline
+        const layerHeaders = document.getElementById('layer-headers');
+        const tracksContainer = document.getElementById('tracks-container');
+        const playhead = document.getElementById('playhead');
+
+        /**
+         * Core Rendering Loop
+         */
+        let lastTime = 0;
+        function renderLoop(timestamp) {
+            if (!lastTime) lastTime = timestamp;
+            const deltaTime = (timestamp - lastTime) / 1000; // 秒に変換
+            lastTime = timestamp;
+
+            if (AppState.isPlaying && !AppState.isRecording) {
+                AppState.currentTime += deltaTime * AppState.playbackRate;
+                if (AppState.currentTime >= AppState.duration) {
+                    AppState.currentTime = AppState.duration;
+                    stopPlayback();
+                }
+                updateUIForTime();
+            }
+
+            drawCanvas();
+            AppState.animationFrameId = requestAnimationFrame(renderLoop);
+        }
+
+        function drawCanvas() {
+            // 背景クリア
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, AppState.canvasWidth, AppState.canvasHeight);
+
+            // Zインデックス順（配列の逆順または下から）に描画
+            // 今回は配列の後ろのものが上（前面）に描画される標準的な仕組み
+            AppState.layers.forEach(layer => {
+                // 時間の範囲内かチェック (プロトタイプでは常に表示とする簡易版も可だが、いちおう時間制御のモックをいれる)
+                // 単純化のため、プロトタイプでは動画レイヤーは常にアクティブとして扱う。
+                
+                if (layer.type === 'video' && layer.element) {
+                    // ビデオの再生位置をアプリの時間と同期
+                    // 注意: 頻繁なcurrentTimeの更新はブラウザによってパフォーマンスが落ちる。
+                    // 再生中はブラウザに任せ、シーク時のみ更新するアプローチもあるが、ここでは簡易同期。
+                    if (Math.abs(layer.element.currentTime - AppState.currentTime) > 0.1 && !AppState.isPlaying) {
+                        layer.element.currentTime = AppState.currentTime;
+                    }
+                    
+                    try {
+                        const w = layer.element.videoWidth * (layer.scale / 100);
+                        const h = layer.element.videoHeight * (layer.scale / 100);
+                        ctx.drawImage(layer.element, layer.x, layer.y, w, h);
+                    } catch (e) { /* ignore ready state errors */ }
+                } 
+                else if (layer.type === 'image' && layer.element) {
+                     const w = layer.element.width * (layer.scale / 100);
+                     const h = layer.element.height * (layer.scale / 100);
+                     ctx.drawImage(layer.element, layer.x, layer.y, w, h);
+                }
+                else if (layer.type === 'text') {
+                    ctx.font = `${layer.size}px "${layer.font}"`;
+                    ctx.fillStyle = layer.color;
+                    ctx.textBaseline = 'top';
+                    
+                    // 複数行対応
+                    const lines = layer.text.split('\n');
+                    lines.forEach((line, index) => {
+                        ctx.fillText(line, layer.x, layer.y + (index * layer.size * 1.2));
+                    });
+                }
+            });
+        }
+
+        /**
+         * Playback Controls
+         */
+        function togglePlay() {
+            if (AppState.isPlaying) {
+                // Pause
+                AppState.isPlaying = false;
+                btnPlay.classList.remove('hidden');
+                btnPause.classList.add('hidden');
+                // pause all videos
+                AppState.layers.filter(l => l.type === 'video').forEach(l => l.element.pause());
+            } else {
+                // Play
+                if (AppState.currentTime >= AppState.duration) AppState.currentTime = 0;
+                AppState.isPlaying = true;
+                lastTime = performance.now();
+                btnPlay.classList.add('hidden');
+                btnPause.classList.remove('hidden');
+                
+                // play all videos
+                AppState.layers.filter(l => l.type === 'video').forEach(l => {
+                    l.element.playbackRate = AppState.playbackRate;
+                    l.element.play().catch(e=>console.log(e));
+                });
+            }
+        }
+
+        function stopPlayback() {
+            AppState.isPlaying = false;
+            AppState.currentTime = 0;
+            btnPlay.classList.remove('hidden');
+            btnPause.classList.add('hidden');
+            updateUIForTime();
+            AppState.layers.filter(l => l.type === 'video').forEach(l => {
+                l.element.pause();
+                l.element.currentTime = 0;
+            });
+        }
+
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        }
+
+        function updateUIForTime() {
+            timeCurrentText.innerText = formatTime(AppState.currentTime);
+            timeTotalText.innerText = formatTime(AppState.duration);
+            
+            // シークバーの更新 (0-100)
+            if (AppState.duration > 0) {
+                seekBar.value = (AppState.currentTime / AppState.duration) * 100;
+                playhead.style.left = `${seekBar.value}%`;
+            }
+        }
+
+        // イベントリスナー: コントロール
+        btnPlay.addEventListener('click', togglePlay);
+        btnPause.addEventListener('click', togglePlay);
+        btnStop.addEventListener('click', stopPlayback);
+        
+        speedSlider.addEventListener('input', (e) => {
+            AppState.playbackRate = parseFloat(e.target.value);
+            speedValue.innerText = AppState.playbackRate.toFixed(1) + 'x';
+            // 実行中の動画にも反映
+            AppState.layers.filter(l => l.type === 'video').forEach(l => {
+                l.element.playbackRate = AppState.playbackRate;
+            });
+        });
+
+        seekBar.addEventListener('input', (e) => {
+            const percent = parseFloat(e.target.value);
+            AppState.currentTime = (percent / 100) * AppState.duration;
+            updateUIForTime();
+            // 動画の現在位置を更新（再生中なら一時停止してシークするのが安全だが簡易実装）
+            AppState.layers.filter(l => l.type === 'video').forEach(l => {
+                l.element.currentTime = AppState.currentTime;
+            });
+            drawCanvas(); // 即座に描画更新
+        });
+
+        /**
+         * Layer Management & Timeline
+         */
+        function addTextLayer() {
+            const newLayer = {
+                id: AppState.nextLayerId++,
+                type: 'text',
+                name: 'テキストレイヤー',
+                text: 'サンプルテキスト',
+                font: 'sans-serif',
+                size: 64,
+                color: '#ffffff',
+                x: AppState.canvasWidth / 2 - 100,
+                y: AppState.canvasHeight / 2 - 30
+            };
+            AppState.layers.push(newLayer);
+            selectLayer(newLayer.id);
+            renderTimeline();
+        }
+
+        function handleFileImport(e) {
+            const files = e.target.files;
+            if (!files.length) return;
+
+            Array.from(files).forEach(file => {
+                const url = URL.createObjectURL(file);
+                if (file.type.startsWith('video/')) {
+                    const video = document.createElement('video');
+                    video.src = url;
+                    video.muted = true; // プロトタイプのためオーディオ制御を簡略化
+                    video.onloadedmetadata = () => {
+                        // 動画の長さに合わせて全体のデュレーションを拡張
+                        if (video.duration > AppState.duration) {
+                            AppState.duration = video.duration;
+                            updateUIForTime();
+                        }
+                        const newLayer = {
+                            id: AppState.nextLayerId++,
+                            type: 'video',
+                            name: file.name,
+                            element: video,
+                            x: 0, y: 0, scale: 100
+                        };
+                        AppState.layers.push(newLayer);
+                        selectLayer(newLayer.id);
+                        renderTimeline();
+                    };
+                } else if (file.type.startsWith('image/')) {
+                    const img = new Image();
+                    img.onload = () => {
+                        const newLayer = {
+                            id: AppState.nextLayerId++,
+                            type: 'image',
+                            name: file.name,
+                            element: img,
+                            x: 0, y: 0, scale: 100
+                        };
+                        AppState.layers.push(newLayer);
+                        selectLayer(newLayer.id);
+                        renderTimeline();
+                    };
+                    img.src = url;
+                }
+            });
+            e.target.value = ''; // リセット
+        }
+
+        document.getElementById('btn-add-text').addEventListener('click', addTextLayer);
+        fileImport.addEventListener('change', handleFileImport);
+        
+        document.getElementById('btn-delete-layer').addEventListener('click', () => {
+            if (AppState.selectedLayerId !== null) {
+                AppState.layers = AppState.layers.filter(l => l.id !== AppState.selectedLayerId);
+                AppState.selectedLayerId = null;
+                updatePropertiesPanel();
+                renderTimeline();
+            }
+        });
+
+        function renderTimeline() {
+            layerHeaders.innerHTML = '';
+            tracksContainer.innerHTML = '';
+
+            // 逆順で表示（上が前面）
+            [...AppState.layers].reverse().forEach(layer => {
+                // ヘッダー
+                const headerDiv = document.createElement('div');
+                headerDiv.className = `h-10 px-2 flex items-center border-b border-gray-700 cursor-pointer hover:bg-gray-700 text-sm truncate ${layer.id === AppState.selectedLayerId ? 'bg-gray-700 text-blue-400 font-bold' : 'text-gray-300'}`;
+                headerDiv.innerText = layer.name;
+                headerDiv.onclick = () => selectLayer(layer.id);
+                
+                // アイコン追加
+                const icon = document.createElement('span');
+                icon.className = 'mr-2 text-xs opacity-70';
+                icon.innerText = layer.type === 'text' ? 'T' : (layer.type === 'video' ? '🎬' : '🖼️');
+                headerDiv.prepend(icon);
+                
+                layerHeaders.appendChild(headerDiv);
+
+                // トラック（ブロック表示。簡易的に全期間表示）
+                const trackRow = document.createElement('div');
+                trackRow.className = 'h-10 border-b border-gray-700/50 flex items-center relative';
+                
+                const block = document.createElement('div');
+                block.className = `h-6 rounded mx-1 absolute ${layer.type === 'text' ? 'bg-blue-600/80' : 'bg-green-600/80'}`;
+                block.style.left = '0%';
+                block.style.width = '100%'; // 全体幅。時間制御実装時は調整
+                block.style.boxShadow = layer.id === AppState.selectedLayerId ? '0 0 0 2px #fff' : 'none';
+                
+                trackRow.appendChild(block);
+                tracksContainer.appendChild(trackRow);
+            });
+        }
+
+        function selectLayer(id) {
+            AppState.selectedLayerId = id;
+            renderTimeline();
+            updatePropertiesPanel();
+        }
+
+        /**
+         * Properties Panel Integration
+         */
+        function updatePropertiesPanel() {
+            const layer = AppState.layers.find(l => l.id === AppState.selectedLayerId);
+            
+            noSelectionMsg.classList.add('hidden');
+            textProps.classList.add('hidden');
+            mediaProps.classList.add('hidden');
+
+            if (!layer) {
+                noSelectionMsg.classList.remove('hidden');
+                return;
+            }
+
+            if (layer.type === 'text') {
+                textProps.classList.remove('hidden');
+                document.getElementById('prop-text-content').value = layer.text;
+                document.getElementById('prop-font-family').value = layer.font;
+                document.getElementById('prop-font-size').value = layer.size;
+                document.getElementById('prop-color').value = layer.color;
+                document.getElementById('prop-color-text').value = layer.color;
+                document.getElementById('prop-pos-x').value = layer.x;
+                document.getElementById('prop-pos-y').value = layer.y;
+            } else {
+                mediaProps.classList.remove('hidden');
+                document.getElementById('prop-media-name').value = layer.name;
+                document.getElementById('prop-media-scale').value = layer.scale;
+                document.getElementById('prop-media-x').value = layer.x;
+                document.getElementById('prop-media-y').value = layer.y;
+            }
+        }
+
+        // イベントリスナー: テキストプロパティ更新
+        document.getElementById('prop-text-content').addEventListener('input', (e) => updateLayerProp('text', e.target.value));
+        document.getElementById('prop-font-family').addEventListener('change', (e) => updateLayerProp('font', e.target.value));
+        document.getElementById('prop-font-size').addEventListener('input', (e) => updateLayerProp('size', parseInt(e.target.value) || 10));
+        document.getElementById('prop-color').addEventListener('input', (e) => {
+            document.getElementById('prop-color-text').value = e.target.value;
+            updateLayerProp('color', e.target.value);
+        });
+        document.getElementById('prop-color-text').addEventListener('input', (e) => {
+            document.getElementById('prop-color').value = e.target.value;
+            updateLayerProp('color', e.target.value);
+        });
+        document.getElementById('prop-pos-x').addEventListener('input', (e) => updateLayerProp('x', parseInt(e.target.value) || 0));
+        document.getElementById('prop-pos-y').addEventListener('input', (e) => updateLayerProp('y', parseInt(e.target.value) || 0));
+
+        // メディアプロパティ更新
+        document.getElementById('prop-media-scale').addEventListener('input', (e) => updateLayerProp('scale', parseInt(e.target.value) || 100));
+        document.getElementById('prop-media-x').addEventListener('input', (e) => updateLayerProp('x', parseInt(e.target.value) || 0));
+        document.getElementById('prop-media-y').addEventListener('input', (e) => updateLayerProp('y', parseInt(e.target.value) || 0));
+
+        function updateLayerProp(key, value) {
+            const layer = AppState.layers.find(l => l.id === AppState.selectedLayerId);
+            if (layer) {
+                layer[key] = value;
+                drawCanvas(); // 即座に反映
+            }
+        }
+
+        /**
+         * Export / Recording (MediaRecorder API)
+         */
+        const btnExport = document.getElementById('btn-export');
+        const statusText = document.getElementById('status-text');
+
+        btnExport.addEventListener('click', async () => {
+            if (AppState.layers.length === 0) return;
+            
+            // 録画準備
+            AppState.isRecording = true;
+            stopPlayback(); // 一旦停止して0に戻す
+            AppState.currentTime = 0;
+            
+            const stream = canvas.captureStream(30); // 30fps
+            const options = { mimeType: 'video/webm; codecs=vp9' };
+            
+            try {
+                AppState.mediaRecorder = new MediaRecorder(stream, options);
+            } catch (e) {
+                AppState.mediaRecorder = new MediaRecorder(stream); // フォールバック
+            }
+
+            AppState.recordedChunks = [];
+            AppState.mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) AppState.recordedChunks.push(e.data);
+            };
+
+            AppState.mediaRecorder.onstop = () => {
+                const blob = new Blob(AppState.recordedChunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = 'output.webm';
+                document.body.appendChild(a);
+                a.click();
+                
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                }, 100);
+                
+                AppState.isRecording = false;
+                btnExport.disabled = false;
+                btnExport.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg> 動画を保存 (WebM)';
+                statusText.innerText = "書き出し完了！";
+                setTimeout(() => statusText.innerText = "", 3000);
+            };
+
+            // UI更新
+            btnExport.disabled = true;
+            btnExport.innerHTML = '<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 書き出し中...';
+            statusText.innerText = "";
+
+            // 動画再生の準備
+            AppState.layers.filter(l => l.type === 'video').forEach(l => {
+                l.element.playbackRate = 1.0;
+                l.element.currentTime = 0;
+            });
+
+            // 録画開始
+            AppState.mediaRecorder.start();
+            
+            // 録画用のアニメーションループ (等速で処理)
+            const fps = 30;
+            const frameTime = 1000 / fps;
+            let exportTime = 0;
+
+            function exportFrame() {
+                if (exportTime >= AppState.duration) {
+                    AppState.mediaRecorder.stop();
+                    return;
+                }
+                
+                AppState.currentTime = exportTime;
+                
+                // 動画を同期
+                AppState.layers.filter(l => l.type === 'video').forEach(l => {
+                    if (l.element.currentTime < exportTime) {
+                         // 強制的に進める（実際はPlayした状態で回す方が滑らかですが、プロトタイプとしてはこれで描画します）
+                         l.element.currentTime = exportTime;
+                    }
+                });
+
+                drawCanvas();
+                updateUIForTime();
+                
+                exportTime += (1 / fps);
+                setTimeout(exportFrame, frameTime);
+            }
+            
+            exportFrame();
+        });
+
+
+        // 初期化
+        updateUIForTime();
+        renderLoop(performance.now()); // ループ開始
+        
+    </script>
 </body>
 </html>
