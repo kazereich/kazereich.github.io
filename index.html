@@ -26,30 +26,18 @@
         ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 5px; border: 2px solid #18181b; }
         ::-webkit-scrollbar-thumb:hover { background: #52525b; }
         
-        .canvas-container { 
-            position: relative; 
-            background: #000; 
-        }
         canvas { 
-            width: 100%; 
-            height: 100%; 
-            display: block;
+            background: #000;
             cursor: grab; 
         }
         canvas:active { cursor: grabbing; }
-        
-        .grid-overlay { 
-            background-size: 50px 50px; 
-            background-image: linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px); 
-            pointer-events: none; 
-        }
     </style>
 </head>
 <body class="bg-zinc-950 text-zinc-300 h-screen overflow-hidden flex flex-col font-sans text-sm">
     <div id="root" class="h-full"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef, useCallback, useMemo } = React;
+        const { useState, useEffect, useRef, useCallback } = React;
 
         const RESOLUTIONS = {
             "720p (HD)": { w: 1280, h: 720 },
@@ -94,9 +82,11 @@
                 if (!canvas) return;
                 const ctx = canvas.getContext('2d');
                 
+                // 背景クリア
                 ctx.fillStyle = '#000000';
                 ctx.fillRect(0, 0, settings.width, settings.height);
 
+                // メディアファイルの同期と音量設定
                 items.forEach(it => {
                     if ((it.type === 'video' || it.type === 'audio') && it.element) {
                         it.element.volume = it.volume !== undefined ? it.volume : 1;
@@ -118,6 +108,7 @@
 
                 const activeItems = items.filter(it => currentTime >= it.start && currentTime <= it.start + it.duration);
                 
+                // アイテムの描画
                 activeItems.sort((a, b) => a.layer - b.layer).forEach(item => {
                     if (item.type === 'audio') return;
 
@@ -186,8 +177,32 @@
                     }
                     ctx.restore();
                 });
-            }, [items, currentTime, settings, selectedId, isPlaying, isRecording]);
 
+                // グリッドの描画（書き出し時や非表示時はスキップ）
+                if (showGrid && !isRecording) {
+                    ctx.save();
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                    ctx.lineWidth = 2;
+                    
+                    // 100pxごとのマス目
+                    for (let x = 100; x < settings.width; x += 100) {
+                        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, settings.height); ctx.stroke();
+                    }
+                    for (let y = 100; y < settings.height; y += 100) {
+                        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(settings.width, y); ctx.stroke();
+                    }
+
+                    // センターライン（少し濃くする）
+                    ctx.strokeStyle = 'rgba(59, 130, 246, 0.5)'; // 青っぽいセンターライン
+                    ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.moveTo(settings.width / 2, 0); ctx.lineTo(settings.width / 2, settings.height); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(0, settings.height / 2); ctx.lineTo(settings.width, settings.height / 2); ctx.stroke();
+                    ctx.restore();
+                }
+
+            }, [items, currentTime, settings, selectedId, isPlaying, isRecording, showGrid]);
+
+            // アニメーションループの開始
             useEffect(() => {
                 const loop = (now) => {
                     const delta = (now - lastTimeRef.current) / 1000;
@@ -210,10 +225,11 @@
                 return () => cancelAnimationFrame(animationRef.current);
             }, [isPlaying, playbackRate, duration, renderCanvas]);
 
-            // キャンバス操作
+            // キャンバス内のアイテム操作
             const handleCanvasMouseDown = (e) => {
                 const canvas = canvasRef.current;
                 const rect = canvas.getBoundingClientRect();
+                // 実際のキャンバスサイズと表示サイズの比率を計算
                 const scaleX = settings.width / rect.width;
                 const scaleY = settings.height / rect.height;
                 const clickX = (e.clientX - rect.left) * scaleX;
@@ -266,6 +282,7 @@
             };
             const handleCanvasMouseUp = () => setIsDragging(false);
 
+            // アイテム追加処理
             const createBaseItem = (type, name) => ({
                 id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
                 type, name, start: currentTime, duration: 5, layer: 1,
@@ -368,7 +385,7 @@
                 setAiText("");
             };
 
-            // スクラブ
+            // タイムラインでのスクラブ操作
             const updateTimeFromMouse = (e) => {
                 const bg = document.getElementById('timeline-bg');
                 if (!bg) return;
@@ -386,13 +403,14 @@
             const handleTimelineMouseMove = (e) => { if (isScrubbing) updateTimeFromMouse(e); };
             const handleTimelineMouseUp = () => setIsScrubbing(false);
 
-            // 書き出し
+            // 動画書き出し (WebM)
             const exportVideo = () => {
                 if (!canvasRef.current) return;
                 setIsRecording(true);
                 setCurrentTime(0);
                 setIsPlaying(true);
                 setSelectedId(null); 
+                setShowGrid(false); // エクスポート時にグリッドを非表示に
 
                 const stream = canvasRef.current.captureStream(settings.fps);
                 const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9', videoBitsPerSecond: settings.vBitrate });
@@ -497,27 +515,24 @@
                                 </button>
                             </div>
 
-                            <div className="flex-1 p-6 flex items-center justify-center min-h-0 overflow-hidden">
-                                {/* アスペクト比を動的に維持するコンテナ */}
-                                <div className={`canvas-container rounded shadow-2xl ring-1 ring-zinc-800 ${showGrid ? 'grid-overlay' : ''}`} 
-                                     style={{ 
-                                         aspectRatio: `${settings.width} / ${settings.height}`,
-                                         width: settings.width >= settings.height ? '100%' : 'auto',
-                                         height: settings.width < settings.height ? '100%' : 'auto',
-                                         maxWidth: '100%',
-                                         maxHeight: '100%'
-                                     }}>
-                                    <canvas
-                                        ref={canvasRef}
-                                        width={settings.width}
-                                        height={settings.height}
-                                        onMouseDown={handleCanvasMouseDown}
-                                        onMouseMove={handleCanvasMouseMove}
-                                        onMouseUp={handleCanvasMouseUp}
-                                        onMouseLeave={handleCanvasMouseUp}
-                                        className="rounded"
-                                    ></canvas>
-                                </div>
+                            {/* 正しいアスペクト比で表示されるキャンバスコンテナ */}
+                            <div className="flex-1 p-6 flex items-center justify-center min-h-0 overflow-hidden relative">
+                                <canvas
+                                    ref={canvasRef}
+                                    width={settings.width}
+                                    height={settings.height}
+                                    onMouseDown={handleCanvasMouseDown}
+                                    onMouseMove={handleCanvasMouseMove}
+                                    onMouseUp={handleCanvasMouseUp}
+                                    onMouseLeave={handleCanvasMouseUp}
+                                    className="rounded shadow-2xl ring-1 ring-zinc-800"
+                                    style={{
+                                        maxWidth: '100%',
+                                        maxHeight: '100%',
+                                        aspectRatio: `${settings.width} / ${settings.height}`,
+                                        objectFit: 'contain'
+                                    }}
+                                ></canvas>
                             </div>
 
                             {/* コントロール */}
