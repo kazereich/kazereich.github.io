@@ -3,422 +3,346 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>自己進化型 Vanilla RNN チャット</title>
+    <title>Gemini風 Vanilla AI</title>
     <style>
-        /* 現代的で洗練されたCSSデザイン */
         :root {
-            --bg-color: #f0f2f5;
+            --bg-color: #f0f4f9;
             --chat-bg: #ffffff;
-            --user-color: #007aff;
-            --ai-color: #e5e5ea;
-            --text-dark: #1c1c1e;
-            --text-light: #ffffff;
-            --border: #d1d1d6;
+            --user-color: #d3e3fd;
+            --user-text: #041e49;
+            --ai-color: #f0f4f9;
+            --ai-text: #1f1f1f;
+            --border: #e0e0e0;
+            --accent: #0b57d0;
         }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
-            margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh;
+            font-family: "Google Sans", -apple-system, sans-serif;
+            background: #e8eaed; margin: 0; display: flex; 
+            justify-content: center; align-items: center; height: 100vh;
         }
         .app-container {
-            width: 100%; max-width: 400px; height: 90vh;
-            background: var(--chat-bg); border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            width: 100%; max-width: 600px; height: 95vh;
+            background: var(--chat-bg); border-radius: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
             display: flex; flex-direction: column; overflow: hidden;
         }
         .header {
-            background: rgba(255,255,255,0.9); padding: 15px;
-            text-align: center; font-weight: bold; color: var(--text-dark);
-            border-bottom: 1px solid var(--border);
-            backdrop-filter: blur(10px); z-index: 10;
+            padding: 20px; text-align: center; font-size: 1.2em; font-weight: bold;
+            color: var(--ai-text); border-bottom: 1px solid var(--border);
         }
-        .status { font-size: 0.8em; color: #34c759; font-weight: normal; }
+        .status { font-size: 0.7em; color: #188038; font-weight: normal; display: block; margin-top: 5px;}
         
         .chat-window {
-            flex: 1; padding: 15px; overflow-y: auto;
-            display: flex; flex-direction: column; gap: 12px;
+            flex: 1; padding: 20px; overflow-y: auto;
+            display: flex; flex-direction: column; gap: 20px;
+            background: var(--chat-bg);
+        }
+        
+        .msg-wrapper { display: flex; flex-direction: column; max-width: 85%; }
+        .msg-wrapper.user { align-self: flex-end; align-items: flex-end; }
+        .msg-wrapper.ai { align-self: flex-start; align-items: flex-start; }
+
+        .message {
+            padding: 14px 18px; border-radius: 20px; font-size: 0.95em; line-height: 1.5;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .user-msg { background: var(--user-color); color: var(--user-text); border-bottom-right-radius: 4px; }
+        .ai-msg { background: var(--ai-color); color: var(--ai-text); border-bottom-left-radius: 4px; }
+        
+        /* 評価ボタン群 */
+        .feedback-actions {
+            display: flex; gap: 10px; margin-top: 6px; padding-left: 10px;
+        }
+        .feedback-btn {
+            background: none; border: none; font-size: 1.1em; cursor: pointer;
+            color: #5f6368; padding: 4px; border-radius: 50%; transition: 0.2s;
+        }
+        .feedback-btn:hover { background: #e8eaed; transform: scale(1.1); }
+        .feedback-btn.active-good { color: #188038; background: #e6f4ea; }
+        .feedback-btn.active-bad { color: #d93025; background: #fce8e6; }
+
+        /* AIが間違えた時にサッと教える入力欄 */
+        .correction-input {
+            display: none; margin-top: 8px; width: 100%; gap: 8px;
+            animation: fadeIn 0.2s ease;
+        }
+        .correction-input.active { display: flex; }
+        .correction-input input {
+            flex: 1; padding: 8px 12px; border: 1px solid var(--border);
+            border-radius: 16px; font-size: 0.85em; outline: none;
+        }
+        .correction-input button {
+            background: var(--accent); color: white; border: none;
+            padding: 8px 12px; border-radius: 16px; cursor: pointer; font-size: 0.85em;
+        }
+
+        .input-area { padding: 15px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; }
+        .input-area input {
+            flex: 1; padding: 15px; border: 1px solid var(--border);
+            border-radius: 30px; font-size: 1em; outline: none; transition: 0.2s;
             background: var(--bg-color);
         }
-        .message {
-            max-width: 75%; padding: 12px 16px; border-radius: 20px;
-            font-size: 0.95em; line-height: 1.4; word-wrap: break-word;
-            position: relative; animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        .input-area input:focus { background: white; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(11,87,208,0.2); }
+        .btn-send {
+            background: var(--accent); color: white; border: none; border-radius: 50%;
+            width: 50px; height: 50px; font-size: 1.2em; cursor: pointer; display: flex;
+            justify-content: center; align-items: center; transition: 0.2s;
         }
-        @keyframes popIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
-        
-        .user-msg {
-            background: var(--user-color); color: var(--text-light);
-            align-self: flex-end; border-bottom-right-radius: 4px;
-        }
-        .ai-msg {
-            background: var(--ai-color); color: var(--text-dark);
-            align-self: flex-start; border-bottom-left-radius: 4px;
-        }
-        .confidence { font-size: 0.7em; color: #888; display: block; margin-top: 4px; text-align: right; }
-
-        .input-area {
-            padding: 10px; background: white; border-top: 1px solid var(--border);
-            display: flex; flex-direction: column; gap: 8px;
-        }
-        .chat-form, .teach-form { display: flex; gap: 8px; }
-        
-        input[type="text"] {
-            flex: 1; padding: 12px; border: 1px solid var(--border);
-            border-radius: 20px; font-size: 0.95em; outline: none; transition: border 0.2s;
-        }
-        input[type="text"]:focus { border-color: var(--user-color); }
-        
-        button {
-            padding: 10px 16px; border: none; border-radius: 20px;
-            font-weight: bold; cursor: pointer; transition: 0.2s;
-        }
-        .btn-send { background: var(--user-color); color: white; }
-        .btn-send:hover { background: #0056b3; }
-        .btn-teach { background: #ff9500; color: white; }
-        .btn-teach:hover { background: #e08300; }
-        
-        .teach-panel {
-            background: #fff8e6; padding: 10px; border-radius: 12px;
-            font-size: 0.85em; border: 1px dashed #ff9500; display: none;
-        }
-        .teach-panel.active { display: block; animation: popIn 0.3s ease; }
+        .btn-send:hover { background: #0842a0; }
     </style>
 </head>
 <body>
 
 <div class="app-container">
     <div class="header">
-        自己進化型 RNN チャット <br>
-        <span class="status" id="statusText">● 待機中 (学習済データ: 0件)</span>
+        Vanilla AI (RLHF Edition)
+        <span class="status" id="statusText">● 待機中</span>
     </div>
     
     <div class="chat-window" id="chatWindow">
-        <!-- チャット履歴がここに追加されます -->
+        <!-- 会話がここに追加される -->
     </div>
     
     <div class="input-area">
-        <!-- 学習用パネル（AIが間違えた時や教えたい時に使う） -->
-        <div class="teach-panel" id="teachPanel">
-            <strong>AIに言葉を教える</strong><br>
-            <span style="color: #666;">直前のあなたの言葉に対する「正しい返答」を入力して学習させます。</span>
-            <div class="teach-form" style="margin-top: 5px;">
-                <input type="text" id="teachInput" placeholder="正しい返答を教えてください...">
-                <button class="btn-teach" id="teachBtn">学習</button>
-            </div>
-        </div>
-
-        <!-- 通常のチャット送信フォーム -->
-        <div class="chat-form">
-            <input type="text" id="chatInput" placeholder="メッセージを入力..." autocomplete="off">
-            <button class="btn-send" id="sendBtn">送信</button>
-        </div>
+        <input type="text" id="chatInput" placeholder="メッセージを入力..." autocomplete="off">
+        <button class="btn-send" id="sendBtn">➤</button>
     </div>
 </div>
 
 <script>
-/**
- * --------------------------------------------------
- * 1. コアとなるAIモデル (Vanilla RNN)
- * --------------------------------------------------
- * 行列計算とバックプロパゲーションを全てJSで実装
- */
+// --- RNN モデル (前回と同じ、Vanilla JSでの行列計算) ---
 class ChatRNN {
     constructor(inputSize, hiddenSize, outputSize, learningRate = 0.1) {
-        this.inputSize = inputSize;
-        this.hiddenSize = hiddenSize;
-        this.outputSize = outputSize;
+        this.inputSize = inputSize; this.hiddenSize = hiddenSize; this.outputSize = outputSize;
         this.learningRate = learningRate;
-
-        // 重みの初期化
         this.w1 = this.initWeights(inputSize + hiddenSize, hiddenSize);
         this.w2 = this.initWeights(hiddenSize, outputSize);
-        this.b1 = new Array(hiddenSize).fill(0);
-        this.b2 = new Array(outputSize).fill(0);
-
-        this.context = new Array(hiddenSize).fill(0); // 文脈層（記憶）
+        this.b1 = new Array(hiddenSize).fill(0); this.b2 = new Array(outputSize).fill(0);
+        this.context = new Array(hiddenSize).fill(0);
     }
-
     initWeights(inSize, outSize) {
         let w = [];
         for (let i = 0; i < inSize; i++) {
             let row = [];
-            for (let j = 0; j < outSize; j++) {
-                // He初期化
-                row.push((Math.random() * 2 - 1) * Math.sqrt(2 / inSize));
-            }
+            for (let j = 0; j < outSize; j++) row.push((Math.random() * 2 - 1) * Math.sqrt(2 / inSize));
             w.push(row);
         }
         return w;
     }
-
     sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
     sigmoidDeriv(x) { return x * (1 - x); }
-
-    resetContext() {
-        this.context = new Array(this.hiddenSize).fill(0);
-    }
-
-    // 順伝播（推論）
+    resetContext() { this.context = new Array(this.hiddenSize).fill(0); }
+    
     forward(inputs) {
         this.combinedInputs = inputs.concat(this.context);
         this.hidden = new Array(this.hiddenSize).fill(0);
-
         for (let i = 0; i < this.combinedInputs.length; i++) {
-            for (let j = 0; j < this.hiddenSize; j++) {
-                this.hidden[j] += this.combinedInputs[i] * this.w1[i][j];
-            }
+            for (let j = 0; j < this.hiddenSize; j++) this.hidden[j] += this.combinedInputs[i] * this.w1[i][j];
         }
-        for (let j = 0; j < this.hiddenSize; j++) {
-            this.hidden[j] = this.sigmoid(this.hidden[j] + this.b1[j]);
-        }
-
-        // 次のターンのための文脈記憶
+        for (let j = 0; j < this.hiddenSize; j++) this.hidden[j] = this.sigmoid(this.hidden[j] + this.b1[j]);
         this.context = this.hidden.slice();
-
+        
         this.outputs = new Array(this.outputSize).fill(0);
         for (let i = 0; i < this.hiddenSize; i++) {
-            for (let j = 0; j < this.outputSize; j++) {
-                this.outputs[j] += this.hidden[i] * this.w2[i][j];
-            }
+            for (let j = 0; j < this.outputSize; j++) this.outputs[j] += this.hidden[i] * this.w2[i][j];
         }
-        for (let j = 0; j < this.outputSize; j++) {
-            this.outputs[j] = this.sigmoid(this.outputs[j] + this.b2[j]);
-        }
+        for (let j = 0; j < this.outputSize; j++) this.outputs[j] = this.sigmoid(this.outputs[j] + this.b2[j]);
         return this.outputs;
     }
-
-    // 逆伝播（学習）
+    
     train(inputs, targets) {
         let outputs = this.forward(inputs);
         let outDeltas = [];
-
         for (let i = 0; i < this.outputSize; i++) {
             let err = targets[i] - outputs[i];
             outDeltas.push(err * this.sigmoidDeriv(outputs[i]));
         }
-
         let hiddenDeltas = new Array(this.hiddenSize).fill(0);
         for (let i = 0; i < this.hiddenSize; i++) {
             let err = 0;
-            for (let j = 0; j < this.outputSize; j++) {
-                err += outDeltas[j] * this.w2[i][j];
-            }
+            for (let j = 0; j < this.outputSize; j++) err += outDeltas[j] * this.w2[i][j];
             hiddenDeltas[i] = err * this.sigmoidDeriv(this.hidden[i]);
         }
-
-        // 重み更新
         for (let i = 0; i < this.hiddenSize; i++) {
-            for (let j = 0; j < this.outputSize; j++) {
-                this.w2[i][j] += this.learningRate * outDeltas[j] * this.hidden[i];
-            }
+            for (let j = 0; j < this.outputSize; j++) this.w2[i][j] += this.learningRate * outDeltas[j] * this.hidden[i];
         }
-        for (let j = 0; j < this.outputSize; j++) {
-            this.b2[j] += this.learningRate * outDeltas[j];
-        }
-
+        for (let j = 0; j < this.outputSize; j++) this.b2[j] += this.learningRate * outDeltas[j];
         for (let i = 0; i < this.combinedInputs.length; i++) {
-            for (let j = 0; j < this.hiddenSize; j++) {
-                this.w1[i][j] += this.learningRate * hiddenDeltas[j] * this.combinedInputs[i];
-            }
+            for (let j = 0; j < this.hiddenSize; j++) this.w1[i][j] += this.learningRate * hiddenDeltas[j] * this.combinedInputs[i];
         }
-        for (let j = 0; j < this.hiddenSize; j++) {
-            this.b1[j] += this.learningRate * hiddenDeltas[j];
-        }
+        for (let j = 0; j < this.hiddenSize; j++) this.b1[j] += this.learningRate * hiddenDeltas[j];
     }
 }
 
-/**
- * --------------------------------------------------
- * 2. NLP・会話管理システム
- * --------------------------------------------------
- * 言葉をベクトルに変換し、AIモデルを動的に再構築する
- */
-let chatHistory = []; // 学習データの蓄積 [{ user: "こんにちは", ai: "やあ！" }]
-let vocabChars = [];  // AIが知っている全文字（特徴量）
-let responses = [];   // AIが知っている全返答パターン（クラス分類）
+// --- システム全体管理 ---
+let chatHistory = []; 
+let vocabChars = [];  
+let responses = [];   
 let aiModel = null;
-let lastUserMessage = "";
 
-// 最初から少しだけ知能を持たせる（シードデータ）
+// 初期知識
 const seedData = [
-    { user: "こんにちは", ai: "こんにちは！何かお話ししましょう。" },
-    { user: "元気？", ai: "はい、元気です！" },
-    { user: "名前は？", ai: "私はブラウザの中で学習するAIです。" }
+    { user: "こんにちは", ai: "こんにちは！何かお手伝いしましょうか？" },
+    { user: "ありがとう", ai: "どういたしまして！" },
+    { user: "ばいばい", ai: "またいつでも話しかけてくださいね。" }
 ];
 
-// テキストを文字ベクトルの頻度に変換（Bag of Characters）
 function textToVector(text) {
     let vec = new Array(vocabChars.length).fill(0);
     for (let char of text) {
         let idx = vocabChars.indexOf(char);
-        if (idx !== -1) vec[idx] += 1; // 既知の文字の頻度をカウント
+        if (idx !== -1) vec[idx] += 1;
     }
     return vec;
 }
 
-// 記憶データから辞書を作り直し、AIの脳を再構築して全学習する
+// モデルの再構築（学習データの増加に対応）
 function rebuildAndTrainModel() {
-    document.getElementById("statusText").innerText = "● 脳を再構築中... (学習中)";
-    document.getElementById("statusText").style.color = "#ff9500";
-
-    // 1. 記憶から全文字と全返答パターンを抽出
-    vocabChars = [];
-    responses = [];
+    document.getElementById("statusText").innerText = "● 学習中...";
+    
+    vocabChars = []; responses = [];
     for (let data of chatHistory) {
-        for (let char of data.user) {
-            if (!vocabChars.includes(char)) vocabChars.push(char);
-        }
+        for (let char of data.user) if (!vocabChars.includes(char)) vocabChars.push(char);
         if (!responses.includes(data.ai)) responses.push(data.ai);
     }
 
-    // 2. 新しい次元数でRNNをリセット（隠れ層は24次元）
     aiModel = new ChatRNN(vocabChars.length, 24, responses.length, 0.15);
 
-    // 3. 過去の会話の文脈を考慮して、順番にトレーニング（エポックを回す）
     const epochs = 1000; 
     for (let e = 0; e < epochs; e++) {
-        aiModel.resetContext(); // 文脈（会話の始まり）をリセット
-        
+        aiModel.resetContext();
         for (let data of chatHistory) {
             let inputVec = textToVector(data.user);
-            
-            // 正解ラベルをワンホットベクトル化
             let targetVec = new Array(responses.length).fill(0);
-            let targetIdx = responses.indexOf(data.ai);
-            if(targetIdx !== -1) targetVec[targetIdx] = 1;
-
+            targetVec[responses.indexOf(data.ai)] = 1; // 正解ラベル
             aiModel.train(inputVec, targetVec);
         }
     }
-
-    document.getElementById("statusText").innerText = `● 待機中 (学習済データ: ${chatHistory.length}件)`;
-    document.getElementById("statusText").style.color = "#34c759";
+    document.getElementById("statusText").innerText = `● 待機中 (学習データ: ${chatHistory.length}件)`;
 }
 
-/**
- * --------------------------------------------------
- * 3. UIの制御
- * --------------------------------------------------
- */
+// --- UI 制御 ---
 const chatWindow = document.getElementById("chatWindow");
 const chatInput = document.getElementById("chatInput");
-const teachPanel = document.getElementById("teachPanel");
-const teachInput = document.getElementById("teachInput");
 
-function appendMessage(text, sender, confidenceStr = "") {
-    const div = document.createElement("div");
-    div.className = `message ${sender}-msg`;
-    div.innerText = text;
-    if (confidenceStr) {
-        const confSpan = document.createElement("span");
-        confSpan.className = "confidence";
-        confSpan.innerText = confidenceStr;
-        div.appendChild(confSpan);
+// メッセージと評価ボタンを表示する関数
+function appendAIMessage(userText, aiText, isSeed = false) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "msg-wrapper ai";
+    
+    const msgDiv = document.createElement("div");
+    msgDiv.className = "message ai-msg";
+    msgDiv.innerText = aiText;
+    wrapper.appendChild(msgDiv);
+
+    // シードの挨拶以外には評価ボタンを付ける
+    if (!isSeed) {
+        const actionDiv = document.createElement("div");
+        actionDiv.className = "feedback-actions";
+        
+        const goodBtn = document.createElement("button");
+        goodBtn.className = "feedback-btn"; goodBtn.innerText = "👍";
+        
+        const badBtn = document.createElement("button");
+        badBtn.className = "feedback-btn"; badBtn.innerText = "👎";
+        
+        actionDiv.appendChild(goodBtn); actionDiv.appendChild(badBtn);
+        
+        // 👎を押した時の訂正入力フォーム
+        const correctionDiv = document.createElement("div");
+        correctionDiv.className = "correction-input";
+        const cInput = document.createElement("input");
+        cInput.type = "text"; cInput.placeholder = "どう返せばよかった？";
+        const cBtn = document.createElement("button");
+        cBtn.innerText = "教える";
+        correctionDiv.appendChild(cInput); correctionDiv.appendChild(cBtn);
+
+        // 👍ボタンの動作：この会話ペアを正式な記憶として強化
+        goodBtn.onclick = () => {
+            goodBtn.classList.add("active-good");
+            badBtn.classList.remove("active-bad");
+            correctionDiv.classList.remove("active");
+            
+            // 履歴に無ければ追加して再学習
+            const exists = chatHistory.some(d => d.user === userText && d.ai === aiText);
+            if (!exists) {
+                chatHistory.push({ user: userText, ai: aiText });
+                setTimeout(rebuildAndTrainModel, 10);
+            }
+        };
+
+        // 👎ボタンの動作：学習を促すフォームを出す
+        badBtn.onclick = () => {
+            badBtn.classList.add("active-bad");
+            goodBtn.classList.remove("active-good");
+            correctionDiv.classList.add("active"); // 直下にサッと入力欄を出す
+            cInput.focus();
+        };
+
+        // 訂正を送信
+        cBtn.onclick = () => {
+            const correctText = cInput.value.trim();
+            if (correctText) {
+                chatHistory.push({ user: userText, ai: correctText }); // 新しい正解を学習
+                correctionDiv.innerHTML = "<span style='font-size:0.8em; color:#188038;'>学習しました！ありがとう✨</span>";
+                setTimeout(rebuildAndTrainModel, 10);
+            }
+        };
+        
+        wrapper.appendChild(actionDiv);
+        wrapper.appendChild(correctionDiv);
     }
-    chatWindow.appendChild(div);
+    
+    chatWindow.appendChild(wrapper);
     chatWindow.scrollTop = chatWindow.scrollHeight;
 }
 
-// ユーザーがメッセージを送信した時
+function appendUserMessage(text) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "msg-wrapper user";
+    const msgDiv = document.createElement("div");
+    msgDiv.className = "message user-msg";
+    msgDiv.innerText = text;
+    wrapper.appendChild(msgDiv);
+    chatWindow.appendChild(wrapper);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+}
+
 document.getElementById("sendBtn").addEventListener("click", () => {
     const text = chatInput.value.trim();
     if (!text) return;
     
-    appendMessage(text, "user");
+    appendUserMessage(text);
     chatInput.value = "";
-    lastUserMessage = text;
 
-    // AIの推論
     let inputVec = textToVector(text);
     
-    // まだ学習データが空、または未知の文字だらけの場合は推論できない
-    if (aiModel === null || vocabChars.length === 0 || Math.max(...inputVec) === 0) {
-        appendMessage("（まだその言葉を知りません。「教える」パネルから返答を教えてください！）", "ai");
-        teachPanel.classList.add("active");
-        teachInput.focus();
+    // まだ知らない言葉のとき
+    if (Math.max(...inputVec) === 0) {
+        // AIが困っている返答を出し、ユーザーが👎を押して教えやすくする
+        appendAIMessage(text, "すみません、その言葉はまだよく分かりません。");
         return;
     }
 
-    // AIの予測
+    // AIの推論
     let prediction = aiModel.forward(inputVec);
-    
-    // 最も確率が高い返答を探す
-    let maxProb = 0;
-    let maxIdx = -1;
-    for (let i = 0; i < prediction.length; i++) {
-        if (prediction[i] > maxProb) { maxProb = prediction[i]; maxIdx = i; }
-    }
-
+    let maxIdx = prediction.indexOf(Math.max(...prediction));
     const aiReply = responses[maxIdx];
-    const probPercent = (maxProb * 100).toFixed(1);
     
-    appendMessage(aiReply, "ai", `確信度: ${probPercent}%`);
-
-    // 確信度が低い（60%以下）場合は、ユーザーに訂正/教育を促す
-    if (maxProb < 0.6) {
-        teachPanel.classList.add("active");
-    } else {
-        teachPanel.classList.remove("active");
-        // 正しく会話できているなら、このまま文脈として履歴に追加して裏で再学習
-        chatHistory.push({ user: text, ai: aiReply });
-        // （本来なら非同期にする方がUXが良いですが、今回はシンプルに同期実行）
-        setTimeout(rebuildAndTrainModel, 10);
-    }
+    // AIの返答を表示（ここに👍👎ボタンが付きます）
+    appendAIMessage(text, aiReply);
 });
 
-// ユーザーが正しい返答を「教える」時
-document.getElementById("teachBtn").addEventListener("click", () => {
-    const correctReply = teachInput.value.trim();
-    if (!correctReply || !lastUserMessage) return;
-
-    // 学習データに追加
-    chatHistory.push({ user: lastUserMessage, ai: correctReply });
-    
-    appendMessage(`【AIの記憶を更新しました】\n「${lastUserMessage}」⇒「${correctReply}」`, "ai");
-    
-    teachInput.value = "";
-    teachPanel.classList.remove("active");
-
-    // 教わったデータを含めて、モデル全体をゼロから再構築・再学習
-    setTimeout(rebuildAndTrainModel, 10);
-});
-
-// Enterキー対応
 chatInput.addEventListener("keypress", (e) => { if (e.key === "Enter") document.getElementById("sendBtn").click(); });
-teachInput.addEventListener("keypress", (e) => { if (e.key === "Enter") document.getElementById("teachBtn").click(); });
 
-// 起動時の初期化（シードデータを学習）
+// 起動時
 window.onload = () => {
-    chatHistory = [...seedData]; // シードデータを読み込み
-    rebuildAndTrainModel();
-    appendMessage("こんにちは！最初から少しだけ言葉を知っています。知らない言葉には変な返事をするので、その時は正しい返事を『教えて』ください。文脈（話の流れ）も学習します！", "ai");
-};
-
-/**
- * --------------------------------------------------
- * 4. Node.js環境用のフォールバック
- * --------------------------------------------------
- * Node.jsで実行した場合は、コンソールでシミュレーションを行います。
- */
-if (typeof window === "undefined") {
-    console.log("Node.js環境で実行中。初期データを学習します...");
     chatHistory = [...seedData];
     rebuildAndTrainModel();
-    console.log("学習完了。");
-    
-    const testInput1 = "こんにちは";
-    const testInput2 = "元気？";
-    
-    aiModel.resetContext(); // 文脈の開始
-    console.log(`\nUser: ${testInput1}`);
-    let p1 = aiModel.forward(textToVector(testInput1));
-    console.log(`AI: ${responses[p1.indexOf(Math.max(...p1))]}`);
-
-    // 前の文脈を引き継いで推論
-    console.log(`\nUser: ${testInput2}`);
-    let p2 = aiModel.forward(textToVector(testInput2));
-    console.log(`AI: ${responses[p2.indexOf(Math.max(...p2))]}`);
-}
+    appendAIMessage("", "こんにちは！チャットしながら学習します。良い返事には👍を、変な返事には👎を押して教えてください！", true);
+};
 </script>
 </body>
 </html>
