@@ -2,77 +2,164 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Vanilla JS - Toy LMM / RNN</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自己進化型 Vanilla RNN チャット</title>
     <style>
-        body { font-family: sans-serif; background: #f4f4f9; padding: 20px; }
-        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        button:hover { background: #0056b3; }
-        pre { background: #333; color: #0f0; padding: 15px; border-radius: 5px; overflow-x: auto; }
-        .pixel-grid { display: grid; grid-template-columns: repeat(2, 50px); gap: 2px; margin-bottom: 10px; }
-        .pixel { width: 50px; height: 50px; border: 1px solid #ccc; }
+        /* 現代的で洗練されたCSSデザイン */
+        :root {
+            --bg-color: #f0f2f5;
+            --chat-bg: #ffffff;
+            --user-color: #007aff;
+            --ai-color: #e5e5ea;
+            --text-dark: #1c1c1e;
+            --text-light: #ffffff;
+            --border: #d1d1d6;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+            margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh;
+        }
+        .app-container {
+            width: 100%; max-width: 400px; height: 90vh;
+            background: var(--chat-bg); border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            display: flex; flex-direction: column; overflow: hidden;
+        }
+        .header {
+            background: rgba(255,255,255,0.9); padding: 15px;
+            text-align: center; font-weight: bold; color: var(--text-dark);
+            border-bottom: 1px solid var(--border);
+            backdrop-filter: blur(10px); z-index: 10;
+        }
+        .status { font-size: 0.8em; color: #34c759; font-weight: normal; }
+        
+        .chat-window {
+            flex: 1; padding: 15px; overflow-y: auto;
+            display: flex; flex-direction: column; gap: 12px;
+            background: var(--bg-color);
+        }
+        .message {
+            max-width: 75%; padding: 12px 16px; border-radius: 20px;
+            font-size: 0.95em; line-height: 1.4; word-wrap: break-word;
+            position: relative; animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes popIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+        
+        .user-msg {
+            background: var(--user-color); color: var(--text-light);
+            align-self: flex-end; border-bottom-right-radius: 4px;
+        }
+        .ai-msg {
+            background: var(--ai-color); color: var(--text-dark);
+            align-self: flex-start; border-bottom-left-radius: 4px;
+        }
+        .confidence { font-size: 0.7em; color: #888; display: block; margin-top: 4px; text-align: right; }
+
+        .input-area {
+            padding: 10px; background: white; border-top: 1px solid var(--border);
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        .chat-form, .teach-form { display: flex; gap: 8px; }
+        
+        input[type="text"] {
+            flex: 1; padding: 12px; border: 1px solid var(--border);
+            border-radius: 20px; font-size: 0.95em; outline: none; transition: border 0.2s;
+        }
+        input[type="text"]:focus { border-color: var(--user-color); }
+        
+        button {
+            padding: 10px 16px; border: none; border-radius: 20px;
+            font-weight: bold; cursor: pointer; transition: 0.2s;
+        }
+        .btn-send { background: var(--user-color); color: white; }
+        .btn-send:hover { background: #0056b3; }
+        .btn-teach { background: #ff9500; color: white; }
+        .btn-teach:hover { background: #e08300; }
+        
+        .teach-panel {
+            background: #fff8e6; padding: 10px; border-radius: 12px;
+            font-size: 0.85em; border: 1px dashed #ff9500; display: none;
+        }
+        .teach-panel.active { display: block; animation: popIn 0.3s ease; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>純粋JavaScript ニューラルネットワーク</h1>
-        <p>外部APIゼロ。文脈記憶(RNN)と、画像特徴の学習（赤い車）を行います。</p>
-        
-        <button id="trainBtn">AIを学習させる (Train)</button>
-        <button id="testBtn" disabled>未知の画像をテスト (Test)</button>
 
-        <h3>ログ出力:</h3>
-        <pre id="log">待機中...</pre>
+<div class="app-container">
+    <div class="header">
+        自己進化型 RNN チャット <br>
+        <span class="status" id="statusText">● 待機中 (学習済データ: 0件)</span>
     </div>
+    
+    <div class="chat-window" id="chatWindow">
+        <!-- チャット履歴がここに追加されます -->
+    </div>
+    
+    <div class="input-area">
+        <!-- 学習用パネル（AIが間違えた時や教えたい時に使う） -->
+        <div class="teach-panel" id="teachPanel">
+            <strong>AIに言葉を教える</strong><br>
+            <span style="color: #666;">直前のあなたの言葉に対する「正しい返答」を入力して学習させます。</span>
+            <div class="teach-form" style="margin-top: 5px;">
+                <input type="text" id="teachInput" placeholder="正しい返答を教えてください...">
+                <button class="btn-teach" id="teachBtn">学習</button>
+            </div>
+        </div>
+
+        <!-- 通常のチャット送信フォーム -->
+        <div class="chat-form">
+            <input type="text" id="chatInput" placeholder="メッセージを入力..." autocomplete="off">
+            <button class="btn-send" id="sendBtn">送信</button>
+        </div>
+    </div>
+</div>
 
 <script>
 /**
- * 外部ライブラリ非依存のリカレント・ニューラルネットワーク (Elman RNN)
- * Node.js と ブラウザ の両方で動作します。
+ * --------------------------------------------------
+ * 1. コアとなるAIモデル (Vanilla RNN)
+ * --------------------------------------------------
+ * 行列計算とバックプロパゲーションを全てJSで実装
  */
-class VanillaRNN {
+class ChatRNN {
     constructor(inputSize, hiddenSize, outputSize, learningRate = 0.1) {
         this.inputSize = inputSize;
         this.hiddenSize = hiddenSize;
         this.outputSize = outputSize;
         this.learningRate = learningRate;
 
-        // 重みの初期化 (入力層+文脈層 -> 隠れ層)
+        // 重みの初期化
         this.w1 = this.initWeights(inputSize + hiddenSize, hiddenSize);
-        // 重みの初期化 (隠れ層 -> 出力層)
         this.w2 = this.initWeights(hiddenSize, outputSize);
-        
         this.b1 = new Array(hiddenSize).fill(0);
         this.b2 = new Array(outputSize).fill(0);
 
-        // 文脈学習用（前回の隠れ層の状態を保持）
-        this.context = new Array(hiddenSize).fill(0);
+        this.context = new Array(hiddenSize).fill(0); // 文脈層（記憶）
     }
 
-    // He初期化のようなランダム値生成
     initWeights(inSize, outSize) {
-        let weights = [];
+        let w = [];
         for (let i = 0; i < inSize; i++) {
             let row = [];
             for (let j = 0; j < outSize; j++) {
+                // He初期化
                 row.push((Math.random() * 2 - 1) * Math.sqrt(2 / inSize));
             }
-            weights.push(row);
+            w.push(row);
         }
-        return weights;
+        return w;
     }
 
     sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
-    sigmoidDerivative(x) { return x * (1 - x); }
+    sigmoidDeriv(x) { return x * (1 - x); }
 
-    // 文脈のリセット（新しい系列の始まり）
     resetContext() {
         this.context = new Array(this.hiddenSize).fill(0);
     }
 
-    // 順伝播（推論・判断）
+    // 順伝播（推論）
     forward(inputs) {
-        // 現在の入力と、前回の文脈（隠れ層）を結合
         this.combinedInputs = inputs.concat(this.context);
         this.hidden = new Array(this.hiddenSize).fill(0);
 
@@ -85,7 +172,7 @@ class VanillaRNN {
             this.hidden[j] = this.sigmoid(this.hidden[j] + this.b1[j]);
         }
 
-        // 次のステップのために現在の隠れ層を記憶（文脈学習）
+        // 次のターンのための文脈記憶
         this.context = this.hidden.slice();
 
         this.outputs = new Array(this.outputSize).fill(0);
@@ -97,44 +184,38 @@ class VanillaRNN {
         for (let j = 0; j < this.outputSize; j++) {
             this.outputs[j] = this.sigmoid(this.outputs[j] + this.b2[j]);
         }
-
         return this.outputs;
     }
 
     // 逆伝播（学習）
     train(inputs, targets) {
         let outputs = this.forward(inputs);
-        let outputErrors = [];
-        let outputDeltas = [];
+        let outDeltas = [];
 
-        // 1. 出力層の誤差計算
         for (let i = 0; i < this.outputSize; i++) {
-            let error = targets[i] - outputs[i];
-            outputErrors.push(error);
-            outputDeltas.push(error * this.sigmoidDerivative(outputs[i]));
+            let err = targets[i] - outputs[i];
+            outDeltas.push(err * this.sigmoidDeriv(outputs[i]));
         }
 
-        // 2. 隠れ層の誤差計算
-        let hiddenErrors = new Array(this.hiddenSize).fill(0);
-        let hiddenDeltas = [];
+        let hiddenDeltas = new Array(this.hiddenSize).fill(0);
         for (let i = 0; i < this.hiddenSize; i++) {
+            let err = 0;
             for (let j = 0; j < this.outputSize; j++) {
-                hiddenErrors[i] += outputDeltas[j] * this.w2[i][j];
+                err += outDeltas[j] * this.w2[i][j];
             }
-            hiddenDeltas.push(hiddenErrors[i] * this.sigmoidDerivative(this.hidden[i]));
+            hiddenDeltas[i] = err * this.sigmoidDeriv(this.hidden[i]);
         }
 
-        // 3. 重みとバイアスの更新 (隠れ層 -> 出力層)
+        // 重み更新
         for (let i = 0; i < this.hiddenSize; i++) {
             for (let j = 0; j < this.outputSize; j++) {
-                this.w2[i][j] += this.learningRate * outputDeltas[j] * this.hidden[i];
+                this.w2[i][j] += this.learningRate * outDeltas[j] * this.hidden[i];
             }
         }
         for (let j = 0; j < this.outputSize; j++) {
-            this.b2[j] += this.learningRate * outputDeltas[j];
+            this.b2[j] += this.learningRate * outDeltas[j];
         }
 
-        // 4. 重みとバイアスの更新 (入力+文脈層 -> 隠れ層)
         for (let i = 0; i < this.combinedInputs.length; i++) {
             for (let j = 0; j < this.hiddenSize; j++) {
                 this.w1[i][j] += this.learningRate * hiddenDeltas[j] * this.combinedInputs[i];
@@ -143,114 +224,200 @@ class VanillaRNN {
         for (let j = 0; j < this.hiddenSize; j++) {
             this.b1[j] += this.learningRate * hiddenDeltas[j];
         }
-        
-        return outputErrors.reduce((a, b) => a + Math.abs(b), 0); // 誤差の総和を返す
     }
 }
 
-// -------------------------------------------------------------
-// AIに「画像認識」と「文脈」を学ばせるためのデータセット定義
-// -------------------------------------------------------------
-// 2x2ピクセル（4ピクセル）の画像をRGB(3値)で表現します。入力次元 = 4 * 3 = 12。
-// 形の概念: 
-//   - 車(Car)の形  : ピクセル[左上, 右上, 左下, 右下]のうち、左上と右下がON
-//   - 箱(Box)の形  : 全てのピクセルがON
-// 色の概念:
-//   - 赤色(Red)    : [1, 0, 0]
-//   - 青色(Blue)   : [0, 0, 1]
+/**
+ * --------------------------------------------------
+ * 2. NLP・会話管理システム
+ * --------------------------------------------------
+ * 言葉をベクトルに変換し、AIモデルを動的に再構築する
+ */
+let chatHistory = []; // 学習データの蓄積 [{ user: "こんにちは", ai: "やあ！" }]
+let vocabChars = [];  // AIが知っている全文字（特徴量）
+let responses = [];   // AIが知っている全返答パターン（クラス分類）
+let aiModel = null;
+let lastUserMessage = "";
 
-function createImage(shapeArray, colorRGB) {
-    let imageVector = [];
-    for (let i = 0; i < shapeArray.length; i++) {
-        let isRendered = shapeArray[i];
-        imageVector.push(isRendered ? colorRGB[0] : 0); // R
-        imageVector.push(isRendered ? colorRGB[1] : 0); // G
-        imageVector.push(isRendered ? colorRGB[2] : 0); // B
-    }
-    return imageVector;
-}
-
-const SHAPE_CAR = [1, 0, 0, 1];
-const SHAPE_BOX = [1, 1, 1, 1];
-const COLOR_RED  = [1, 0, 0];
-const COLOR_BLUE = [0, 0, 1];
-
-// 出力ベクトル: [赤度合い, 青度合い, 車度合い, 箱度合い]
-const TARGET_RED_BOX   = [1, 0, 0, 1];
-const TARGET_BLUE_CAR  = [0, 1, 1, 0];
-const TARGET_BLUE_BOX  = [0, 1, 0, 1];
-// 注: 「赤い車」のデータは学習セットに含めず、AIが概念を組み合わせて自己判断できるかをテストします。
-
-const trainingData = [
-    { input: createImage(SHAPE_BOX, COLOR_RED), target: TARGET_RED_BOX, name: "赤い箱" },
-    { input: createImage(SHAPE_CAR, COLOR_BLUE), target: TARGET_BLUE_CAR, name: "青い車" },
-    { input: createImage(SHAPE_BOX, COLOR_BLUE), target: TARGET_BLUE_BOX, name: "青い箱" },
+// 最初から少しだけ知能を持たせる（シードデータ）
+const seedData = [
+    { user: "こんにちは", ai: "こんにちは！何かお話ししましょう。" },
+    { user: "元気？", ai: "はい、元気です！" },
+    { user: "名前は？", ai: "私はブラウザの中で学習するAIです。" }
 ];
 
-// 入力12次元, 隠れ層20次元, 出力4次元 のAIモデルを作成
-const aiModel = new VanillaRNN(12, 20, 4, 0.2);
-
-// -------------------------------------------------------------
-// アプリケーションとUIの制御 (ブラウザ用)
-// -------------------------------------------------------------
-if (typeof window !== "undefined") {
-    const logEl = document.getElementById("log");
-    const trainBtn = document.getElementById("trainBtn");
-    const testBtn = document.getElementById("testBtn");
-
-    function log(text) {
-        logEl.textContent += text + "\n";
-        logEl.scrollTop = logEl.scrollHeight;
+// テキストを文字ベクトルの頻度に変換（Bag of Characters）
+function textToVector(text) {
+    let vec = new Array(vocabChars.length).fill(0);
+    for (let char of text) {
+        let idx = vocabChars.indexOf(char);
+        if (idx !== -1) vec[idx] += 1; // 既知の文字の頻度をカウント
     }
-
-    trainBtn.addEventListener("click", () => {
-        log("学習を開始します...");
-        trainBtn.disabled = true;
-        
-        let epochs = 5000;
-        for (let i = 0; i < epochs; i++) {
-            let totalError = 0;
-            // エポックごとに文脈をリセット
-            aiModel.resetContext();
-            
-            // 順番に学習させることで、AIは「文脈(前の画像)」も微弱に学習します
-            for (let data of trainingData) {
-                totalError += aiModel.train(data.input, data.target);
-            }
-            if (i % 1000 === 0) log(`Epoch ${i} - 誤差: ${totalError.toFixed(4)}`);
-        }
-        log("学習が完了しました！未知の画像「赤い車」をテスト可能です。\n");
-        testBtn.disabled = false;
-    });
-
-    testBtn.addEventListener("click", () => {
-        // 未学習の画像「赤い車」を生成
-        const redCarImage = createImage(SHAPE_CAR, COLOR_RED);
-        
-        // 推論を実行
-        aiModel.resetContext();
-        const prediction = aiModel.forward(redCarImage);
-        
-        log("==== 未知の画像『赤い車』を入力 ====");
-        log(`・赤である確率: ${(prediction[0] * 100).toFixed(1)}%`);
-        log(`・青である確率: ${(prediction[1] * 100).toFixed(1)}%`);
-        log(`・車である確率: ${(prediction[2] * 100).toFixed(1)}%`);
-        log(`・箱である確率: ${(prediction[3] * 100).toFixed(1)}%`);
-        log("AIは「赤い箱」と「青い車」の学習経験から、『赤』という色の概念と『車』という形の概念を切り分けて認識し、組み合わせることに成功しました！\n");
-    });
+    return vec;
 }
-// Node.js用フォールバック
-else {
-    console.log("Node.js環境で実行中。学習を開始します...");
-    for (let i = 0; i < 5000; i++) {
-        aiModel.resetContext();
-        for (let data of trainingData) { aiModel.train(data.input, data.target); }
+
+// 記憶データから辞書を作り直し、AIの脳を再構築して全学習する
+function rebuildAndTrainModel() {
+    document.getElementById("statusText").innerText = "● 脳を再構築中... (学習中)";
+    document.getElementById("statusText").style.color = "#ff9500";
+
+    // 1. 記憶から全文字と全返答パターンを抽出
+    vocabChars = [];
+    responses = [];
+    for (let data of chatHistory) {
+        for (let char of data.user) {
+            if (!vocabChars.includes(char)) vocabChars.push(char);
+        }
+        if (!responses.includes(data.ai)) responses.push(data.ai);
     }
-    const redCarImage = createImage(SHAPE_CAR, COLOR_RED);
-    aiModel.resetContext();
-    const prediction = aiModel.forward(redCarImage);
-    console.log("\n未知の画像「赤い車」の予測結果:");
-    console.log(`[赤, 青, 車, 箱] =`, prediction.map(p => p.toFixed(3)));
+
+    // 2. 新しい次元数でRNNをリセット（隠れ層は24次元）
+    aiModel = new ChatRNN(vocabChars.length, 24, responses.length, 0.15);
+
+    // 3. 過去の会話の文脈を考慮して、順番にトレーニング（エポックを回す）
+    const epochs = 1000; 
+    for (let e = 0; e < epochs; e++) {
+        aiModel.resetContext(); // 文脈（会話の始まり）をリセット
+        
+        for (let data of chatHistory) {
+            let inputVec = textToVector(data.user);
+            
+            // 正解ラベルをワンホットベクトル化
+            let targetVec = new Array(responses.length).fill(0);
+            let targetIdx = responses.indexOf(data.ai);
+            if(targetIdx !== -1) targetVec[targetIdx] = 1;
+
+            aiModel.train(inputVec, targetVec);
+        }
+    }
+
+    document.getElementById("statusText").innerText = `● 待機中 (学習済データ: ${chatHistory.length}件)`;
+    document.getElementById("statusText").style.color = "#34c759";
+}
+
+/**
+ * --------------------------------------------------
+ * 3. UIの制御
+ * --------------------------------------------------
+ */
+const chatWindow = document.getElementById("chatWindow");
+const chatInput = document.getElementById("chatInput");
+const teachPanel = document.getElementById("teachPanel");
+const teachInput = document.getElementById("teachInput");
+
+function appendMessage(text, sender, confidenceStr = "") {
+    const div = document.createElement("div");
+    div.className = `message ${sender}-msg`;
+    div.innerText = text;
+    if (confidenceStr) {
+        const confSpan = document.createElement("span");
+        confSpan.className = "confidence";
+        confSpan.innerText = confidenceStr;
+        div.appendChild(confSpan);
+    }
+    chatWindow.appendChild(div);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+}
+
+// ユーザーがメッセージを送信した時
+document.getElementById("sendBtn").addEventListener("click", () => {
+    const text = chatInput.value.trim();
+    if (!text) return;
+    
+    appendMessage(text, "user");
+    chatInput.value = "";
+    lastUserMessage = text;
+
+    // AIの推論
+    let inputVec = textToVector(text);
+    
+    // まだ学習データが空、または未知の文字だらけの場合は推論できない
+    if (aiModel === null || vocabChars.length === 0 || Math.max(...inputVec) === 0) {
+        appendMessage("（まだその言葉を知りません。「教える」パネルから返答を教えてください！）", "ai");
+        teachPanel.classList.add("active");
+        teachInput.focus();
+        return;
+    }
+
+    // AIの予測
+    let prediction = aiModel.forward(inputVec);
+    
+    // 最も確率が高い返答を探す
+    let maxProb = 0;
+    let maxIdx = -1;
+    for (let i = 0; i < prediction.length; i++) {
+        if (prediction[i] > maxProb) { maxProb = prediction[i]; maxIdx = i; }
+    }
+
+    const aiReply = responses[maxIdx];
+    const probPercent = (maxProb * 100).toFixed(1);
+    
+    appendMessage(aiReply, "ai", `確信度: ${probPercent}%`);
+
+    // 確信度が低い（60%以下）場合は、ユーザーに訂正/教育を促す
+    if (maxProb < 0.6) {
+        teachPanel.classList.add("active");
+    } else {
+        teachPanel.classList.remove("active");
+        // 正しく会話できているなら、このまま文脈として履歴に追加して裏で再学習
+        chatHistory.push({ user: text, ai: aiReply });
+        // （本来なら非同期にする方がUXが良いですが、今回はシンプルに同期実行）
+        setTimeout(rebuildAndTrainModel, 10);
+    }
+});
+
+// ユーザーが正しい返答を「教える」時
+document.getElementById("teachBtn").addEventListener("click", () => {
+    const correctReply = teachInput.value.trim();
+    if (!correctReply || !lastUserMessage) return;
+
+    // 学習データに追加
+    chatHistory.push({ user: lastUserMessage, ai: correctReply });
+    
+    appendMessage(`【AIの記憶を更新しました】\n「${lastUserMessage}」⇒「${correctReply}」`, "ai");
+    
+    teachInput.value = "";
+    teachPanel.classList.remove("active");
+
+    // 教わったデータを含めて、モデル全体をゼロから再構築・再学習
+    setTimeout(rebuildAndTrainModel, 10);
+});
+
+// Enterキー対応
+chatInput.addEventListener("keypress", (e) => { if (e.key === "Enter") document.getElementById("sendBtn").click(); });
+teachInput.addEventListener("keypress", (e) => { if (e.key === "Enter") document.getElementById("teachBtn").click(); });
+
+// 起動時の初期化（シードデータを学習）
+window.onload = () => {
+    chatHistory = [...seedData]; // シードデータを読み込み
+    rebuildAndTrainModel();
+    appendMessage("こんにちは！最初から少しだけ言葉を知っています。知らない言葉には変な返事をするので、その時は正しい返事を『教えて』ください。文脈（話の流れ）も学習します！", "ai");
+};
+
+/**
+ * --------------------------------------------------
+ * 4. Node.js環境用のフォールバック
+ * --------------------------------------------------
+ * Node.jsで実行した場合は、コンソールでシミュレーションを行います。
+ */
+if (typeof window === "undefined") {
+    console.log("Node.js環境で実行中。初期データを学習します...");
+    chatHistory = [...seedData];
+    rebuildAndTrainModel();
+    console.log("学習完了。");
+    
+    const testInput1 = "こんにちは";
+    const testInput2 = "元気？";
+    
+    aiModel.resetContext(); // 文脈の開始
+    console.log(`\nUser: ${testInput1}`);
+    let p1 = aiModel.forward(textToVector(testInput1));
+    console.log(`AI: ${responses[p1.indexOf(Math.max(...p1))]}`);
+
+    // 前の文脈を引き継いで推論
+    console.log(`\nUser: ${testInput2}`);
+    let p2 = aiModel.forward(textToVector(testInput2));
+    console.log(`AI: ${responses[p2.indexOf(Math.max(...p2))]}`);
 }
 </script>
 </body>
